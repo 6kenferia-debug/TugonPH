@@ -7,7 +7,7 @@ import {
   getAuthToken,
   setAuthToken,
 } from "../../services/api";
-import { connectRealtime, disconnectRealtime } from "../../services/socket";
+import { connectRealtime, disconnectRealtime } from "../../services/polling";
 
 interface User {
   id: string;

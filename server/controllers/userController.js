@@ -1,6 +1,5 @@
 const User = require("../models/User");
 const { removeUserFiles } = require("./storageController");
-const { disconnectUserSockets } = require("../realtime/socket");
 
 function serializeUser(user) {
   return user.toJSON();
@@ -42,16 +41,12 @@ async function reviewRegistration(req, res) {
   };
   const user = await User.findByIdAndUpdate(req.params.userId, updates, { returnDocument: "after", runValidators: true });
   if (!user) return res.status(404).json({ error: "User not found." });
-  if (!user.isActive || user.accountStatus !== "approved") {
-    disconnectUserSockets(user.id);
-  }
   return res.json({ profile: serializeUser(user) });
 }
 
 async function deleteUser(req, res) {
   const user = await User.findByIdAndDelete(req.params.userId);
   if (!user) return res.status(404).json({ error: "User not found." });
-  disconnectUserSockets(user.id);
   await removeUserFiles(user);
   return res.json({ message: "User deleted successfully." });
 }

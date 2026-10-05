@@ -5,7 +5,6 @@ const { asyncRoute } = require("./complaintController");
 const { removePublicFileUrl } = require("../services/storage-service");
 const { sendStatusUpdateEmail } = require("../services/email");
 const { createRequestHistoryEntry, createRequestHistoryEntries, getRequestHistory } = require("../services/requestHistory");
-const { emitRequestChanged, emitRequestDeleted } = require("../realtime/socket");
 
 async function recordAssistanceHistory({ user, existingRequest, nextRequest, updates }) {
   const entries = [];
@@ -196,7 +195,6 @@ async function create(req, res) {
     user: req.user,
   });
 
-  emitRequestChanged("assistance:created", assistanceRequest);
   return res.status(201).json({ assistanceRequest });
 }
 
@@ -266,7 +264,6 @@ async function remove(req, res) {
   if (assistanceRequest.resolutionProofImage) {
     await removePublicFileUrl(assistanceRequest.resolutionProofImage).catch(() => false);
   }
-  emitRequestDeleted("assistance:deleted", assistanceRequest);
   return res.json({ message: "Assistance request deleted successfully." });
 }
 

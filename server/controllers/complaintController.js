@@ -4,7 +4,6 @@ const User = require("../models/User");
 const { removePublicFileUrl } = require("../services/storage-service");
 const { sendStatusUpdateEmail } = require("../services/email");
 const { createRequestHistoryEntry, createRequestHistoryEntries, getRequestHistory } = require("../services/requestHistory");
-const { emitRequestChanged, emitRequestDeleted } = require("../realtime/socket");
 
 async function recordComplaintHistory({ user, existingComplaint, nextComplaint, updates }) {
   const entries = [];
@@ -211,7 +210,6 @@ async function create(req, res) {
     user: req.user,
   });
 
-  emitRequestChanged("complaint:created", complaint);
   return res.status(201).json({ complaint });
 }
 
@@ -281,7 +279,6 @@ async function remove(req, res) {
   if (complaint.resolutionProofImage) {
     await removePublicFileUrl(complaint.resolutionProofImage).catch(() => false);
   }
-  emitRequestDeleted("complaint:deleted", complaint);
   return res.json({ message: "Complaint deleted successfully." });
 }
 

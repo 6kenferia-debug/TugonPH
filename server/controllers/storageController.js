@@ -8,7 +8,6 @@ const {
   saveFile,
 } = require("../services/storage-service");
 const { createRequestHistoryEntry } = require("../services/requestHistory");
-const { emitRequestChanged } = require("../realtime/socket");
 
 const asyncRoute = (handler) => (req, res, next) =>
   Promise.resolve(handler(req, res, next)).catch(next);
@@ -88,10 +87,6 @@ async function saveResolutionProof(req, res, Model, recordType) {
   if (previousUrl && previousUrl !== nextUrl) {
     await removePublicFileUrl(previousUrl).catch(() => false);
   }
-  emitRequestChanged(
-    recordType === "Complaint" ? "complaint:updated" : "assistance:updated",
-    record,
-  );
   return res.json({ [recordType === "Complaint" ? "complaint" : "assistanceRequest"]: record, url: nextUrl });
 }
 
