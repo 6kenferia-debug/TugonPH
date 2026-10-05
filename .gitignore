@@ -17,6 +17,7 @@ server/uploads/
 *.pem
 
 # Debug
+build-output.txt
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
