@@ -1,0 +1,1748 @@
+import { useEffect, useRef, useState } from "react";
+import type { ChangeEvent } from "react";
+import {
+  COMPLAINT_CATEGORIES,
+  ASSISTANCE_CATEGORIES,
+} from "../config/categories";
+import { api } from "../services/api";
+import type { AssistanceRequest } from "./assistance-manager";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "./ui/card";
+import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "./ui/table";
+import { Textarea } from "./ui/textarea";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "./ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { Calendar } from "./ui/calendar";
+import {
+  Search,
+  Filter,
+  MessageCircle,
+  Clock,
+  CheckCircle,
+  XCircle,
+  CalendarIcon,
+  X,
+  Settings,
+  Map,
+  RefreshCw,
+  Trash2,
+  Upload,
+  Save,
+} from "lucide-react";
+import { ImageWithFallback } from "./figma/ImageWithFallback";
+import { TicketBadge } from "./ticket-badge";
+import { format, parse, isValid } from "date-fns";
+import type { DateRange } from "react-day-picker";
+import { toast } from "sonner";
+
+interface Complaint {
+  id: string;
+  ticketId?: string;
+  title: string;
+  description: string;
+  category: string;
+  location: string;
+  photo?: string;
+  contactInfo: string;
+  status: "pending" | "in-progress" | "resolved" | "rejected";
+  dateSubmitted: string;
+  priority: "low" | "medium" | "high";
+  adminNotes?: string;
+  resolutionProofImage?: string;
+  resolutionProofUploadedAt?: string;
+  resolutionProofUploadedBy?: string;
+  respondent?: string;
+  userId?: string;
+  userName?: string;
+  latitude?: number;
+  longitude?: number;
+  coordinates?: { lat: number; lng: number };
+}
+
+interface AdminPanelProps {
+  complaints: Complaint[];
+  assistanceRequests?: AssistanceRequest[];
+  onUpdateComplaint: (id: string, updates: Partial<Complaint>) => void;
+  onDeleteComplaint: (id: string) => Promise<{ error?: string }>;
+  onUpdateAssistance?: (
+    id: string,
+    updates: Partial<AssistanceRequest>,
+  ) => Promise<{ error?: string }>;
+  onDeleteAssistance?: (id: string) => Promise<{ error?: string }>;
+  onUploadComplaintResolutionProof?: (
+    id: string,
+    file: File,
+  ) => Promise<{ error?: string; url?: string }>;
+  onUploadAssistanceResolutionProof?: (
+    id: string,
+    file: File,
+  ) => Promise<{ error?: string; url?: string }>;
+  onRefresh?: () => Promise<void> | void;
+  refreshing?: boolean;
+  onOpenHeatmap?: () => void;
+}
+
+export function AdminPanel({
+  complaints,
+  assistanceRequests = [],
+  onUpdateComplaint,
+  onDeleteComplaint,
+  onUpdateAssistance,
+  onDeleteAssistance,
+  onUploadComplaintResolutionProof,
+  onUploadAssistanceResolutionProof,
+  onRefresh,
+  refreshing = false,
+  onOpenHeatmap,
+}: AdminPanelProps) {  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState<"complaint" | "assistance">(
+    "complaint",
+  );
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [manualStartDate, setManualStartDate] = useState("");
+  const [manualEndDate, setManualEndDate] = useState("");
+  const [datePopoverOpen, setDatePopoverOpen] = useState(false);
+  const [selectedComplaint, setSelectedComplaint] = useState<Complaint | null>(
+    null,
+  );
+  const [adminNotes, setAdminNotes] = useState("");
+  const proofInputRef = useRef<HTMLInputElement | null>(null);
+  const [proofUploadingId, setProofUploadingId] = useState<string | null>(null);
+  const [selectedPriority, setSelectedPriority] = useState<
+    "low" | "medium" | "high"
+  >("medium");
+  const [deleteTarget, setDeleteTarget] = useState<Complaint | null>(null);
+  const availableCategories =
+    typeFilter === "complaint" ? COMPLAINT_CATEGORIES : ASSISTANCE_CATEGORIES;
+
+  useEffect(() => {
+    if (
+      categoryFilter !== "all" &&
+      !availableCategories.some((category) => category.value === categoryFilter)
+    ) {
+      setCategoryFilter("all");
+    }
+  }, [availableCategories, categoryFilter]);
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "pending":
+        return "bg-yellow-100 text-yellow-800  ";
+      case "in-progress":
+        return "bg-blue-100 text-blue-800  ";
+      case "resolved":
+        return "bg-green-100 text-green-800  ";
+      case "rejected":
+        return "bg-red-100 text-red-800  ";
+      default:
+        return "bg-gray-100 text-gray-800  ";
+    }
+  };
+
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case "high":
+        return "bg-red-500";
+      case "medium":
+        return "bg-yellow-500";
+      case "low":
+        return "bg-green-500";
+      default:
+        return "bg-gray-500";
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "pending":
+        return <Clock className="w-4 h-4" />;
+      case "in-progress":
+        return <MessageCircle className="w-4 h-4" />;
+      case "resolved":
+        return <CheckCircle className="w-4 h-4" />;
+      case "rejected":
+        return <XCircle className="w-4 h-4" />;
+      default:
+        return <Clock className="w-4 h-4" />;
+    }
+  };
+
+  const baseComplaints = complaints.filter((complaint) => {
+    // Enhanced search - search across all text fields including complainant name
+    const searchLower = searchTerm.toLowerCase();
+    const matchesSearch =
+      !searchTerm ||
+      complaint.title.toLowerCase().includes(searchLower) ||
+      complaint.description.toLowerCase().includes(searchLower) ||
+      complaint.location.toLowerCase().includes(searchLower) ||
+      complaint.category.toLowerCase().includes(searchLower) ||
+      complaint.status.toLowerCase().includes(searchLower) ||
+      (complaint.ticketId || "").toLowerCase().includes(searchLower) ||
+      complaint.contactInfo.toLowerCase().includes(searchLower) ||
+      (complaint.userName &&
+        complaint.userName.toLowerCase().includes(searchLower)) ||
+      (complaint.respondent &&
+        complaint.respondent.toLowerCase().includes(searchLower)) ||
+      (complaint.adminNotes &&
+        complaint.adminNotes.toLowerCase().includes(searchLower));
+
+    const matchesCategory =
+      categoryFilter === "all" || complaint.category === categoryFilter;
+
+    // Date range filter - check if complaint date falls within selected range
+    let matchesDate = true;
+    if (dateRange?.from) {
+      const complaintDate = new Date(complaint.dateSubmitted);
+      complaintDate.setHours(0, 0, 0, 0);
+
+      const fromDate = new Date(dateRange.from);
+      fromDate.setHours(0, 0, 0, 0);
+
+      if (dateRange.to) {
+        const toDate = new Date(dateRange.to);
+        toDate.setHours(23, 59, 59, 999);
+        matchesDate = complaintDate >= fromDate && complaintDate <= toDate;
+      } else {
+        // If only 'from' date is selected, match that specific date
+        matchesDate = complaintDate.toDateString() === fromDate.toDateString();
+      }
+    }
+
+    return matchesSearch && matchesCategory && matchesDate;
+  });
+
+  const filteredComplaints = baseComplaints.filter(
+    (complaint) => statusFilter === "all" || complaint.status === statusFilter,
+  );
+
+  const baseAssistance = assistanceRequests.filter((req) => {
+    const searchLower = searchTerm.toLowerCase();
+    const matchesSearch =
+      !searchTerm ||
+      req.title.toLowerCase().includes(searchLower) ||
+      req.description.toLowerCase().includes(searchLower) ||
+      req.location.toLowerCase().includes(searchLower) ||
+      req.category.toLowerCase().includes(searchLower) ||
+      req.status.toLowerCase().includes(searchLower) ||
+      (req.ticketId || "").toLowerCase().includes(searchLower) ||
+      req.contactInfo.toLowerCase().includes(searchLower) ||
+      (req.userName && req.userName.toLowerCase().includes(searchLower)) ||
+      (req.respondent && req.respondent.toLowerCase().includes(searchLower)) ||
+      (req.adminNotes && req.adminNotes.toLowerCase().includes(searchLower));
+
+    const matchesCategory =
+      categoryFilter === "all" || req.category === categoryFilter;
+
+    let matchesDate = true;
+    if (dateRange?.from) {
+      const reqDate = new Date(req.dateSubmitted);
+      reqDate.setHours(0, 0, 0, 0);
+
+      const fromDate = new Date(dateRange.from);
+      fromDate.setHours(0, 0, 0, 0);
+
+      if (dateRange.to) {
+        const toDate = new Date(dateRange.to);
+        toDate.setHours(23, 59, 59, 999);
+        matchesDate = reqDate >= fromDate && reqDate <= toDate;
+      } else {
+        matchesDate = reqDate.toDateString() === fromDate.toDateString();
+      }
+    }
+
+    return matchesSearch && matchesCategory && matchesDate;
+  });
+
+  const filteredAssistance = baseAssistance.filter(
+    (req) => statusFilter === "all" || req.status === statusFilter,
+  );
+
+  const handleStatusUpdate = (id: string, newStatus: string) => {
+    if (typeFilter === "assistance") {
+      void onUpdateAssistance?.(id, { status: newStatus as any });
+    } else {
+      onUpdateComplaint(id, { status: newStatus as any });
+    }
+    if (selectedComplaint && selectedComplaint.id === id) {
+      setSelectedComplaint({ ...selectedComplaint, status: newStatus as any });
+    }
+  };
+
+  const handlePriorityUpdate = (
+    id: string,
+    newPriority: "low" | "medium" | "high",
+  ) => {
+    if (typeFilter === "assistance") {
+      void onUpdateAssistance?.(id, { priority: newPriority });
+    } else {
+      onUpdateComplaint(id, { priority: newPriority });
+    }
+    if (selectedComplaint && selectedComplaint.id === id) {
+      setSelectedComplaint({ ...selectedComplaint, priority: newPriority });
+    }
+  };
+
+  const handleManualDateApply = () => {
+    try {
+      let from: Date | undefined;
+      let to: Date | undefined;
+
+      if (manualStartDate) {
+        const parsedStart = parse(manualStartDate, "MM/dd/yy", new Date());
+        if (isValid(parsedStart)) {
+          from = parsedStart;
+        }
+      }
+
+      if (manualEndDate) {
+        const parsedEnd = parse(manualEndDate, "MM/dd/yy", new Date());
+        if (isValid(parsedEnd)) {
+          to = parsedEnd;
+        }
+      }
+
+      if (from) {
+        setDateRange({ from, to });
+        setDatePopoverOpen(false); // Close the popover after applying
+      }
+    } catch (error) {
+      console.error("Invalid date format");
+    }
+  };
+
+  const handleSaveNotes = () => {
+    if (!selectedComplaint) return;
+    if (typeFilter === "assistance") {
+      void onUpdateAssistance?.(selectedComplaint.id, { adminNotes });
+    } else {
+      onUpdateComplaint(selectedComplaint.id, { adminNotes });
+    }
+    setSelectedComplaint({ ...selectedComplaint, adminNotes });
+  };
+
+  const handleProofFileChange = async (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !selectedComplaint) return;
+
+    const allowedTypes = new Set([
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
+      "image/webp",
+    ]);
+    const fileExt = file.name.split(".").pop()?.toLowerCase() || "";
+    const allowedExtensions = new Set(["jpg", "jpeg", "png", "webp"]);
+
+    if (
+      (file.type && !allowedTypes.has(file.type)) ||
+      !allowedExtensions.has(fileExt)
+    ) {
+      toast.error("Please upload a JPG, JPEG, PNG, or WEBP image.");
+      return;
+    }
+
+    try {
+      setProofUploadingId(selectedComplaint.id);
+      const result =
+        typeFilter === "assistance"
+          ? await onUploadAssistanceResolutionProof?.(
+              selectedComplaint.id,
+              file,
+            )
+          : await onUploadComplaintResolutionProof?.(
+              selectedComplaint.id,
+              file,
+            );
+
+      if (!result || result.error) {
+        toast.error(result?.error || "Proof image upload is not available.");
+        return;
+      }
+
+      setSelectedComplaint({
+        ...selectedComplaint,
+        resolutionProofImage: result.url,
+        resolutionProofUploadedAt: new Date().toISOString(),
+      });
+    } catch {
+      toast.error("Failed to upload proof image.");
+    } finally {
+      setProofUploadingId(null);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+
+    if (typeFilter === "assistance") {
+      const { error } = await onDeleteAssistance?.(deleteTarget.id as string);
+      if (error) return;
+    } else {
+      const { error } = await onDeleteComplaint(deleteTarget.id);
+      if (error) return;
+    }
+
+    if (selectedComplaint?.id === deleteTarget.id) {
+      setSelectedComplaint(null);
+      setAdminNotes("");
+    }
+
+    setDeleteTarget(null);
+  };
+
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [requestHistory, setRequestHistory] = useState<Array<{
+    id: string;
+    action: string;
+    previousValue: string | null;
+    newValue: string | null;
+    details: string;
+    performedByName: string;
+    performedByRole: string;
+    createdAt: string;
+  }>>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+
+  const openHistory = async (complaint: Complaint) => {
+    setHistoryOpen(true);
+    setSelectedComplaint(complaint);
+    setHistoryLoading(true);
+    setHistoryError(null);
+    setRequestHistory([]);
+    try {
+      const { history } = await api.get<{ history: Array<{
+        id: string;
+        action: string;
+        previousValue: string | null;
+        newValue: string | null;
+        details: string;
+        performedByName: string;
+        performedByRole: string;
+        createdAt: string;
+      }> }>(`/${typeFilter === "assistance" ? "assistance" : "complaints"}/${encodeURIComponent(complaint.id)}/history`);
+      setRequestHistory(history || []);
+    } catch (error) {
+      console.error("Failed to load request history:", error);
+      const message = error instanceof Error ? error.message : "Unknown API error";
+      setHistoryError(message);
+      toast.error(`Unable to load request history: ${message}`);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const renderAdminNotesAndProof = () => {
+    const isProofUploading =
+      Boolean(selectedComplaint) && proofUploadingId === selectedComplaint?.id;
+
+    return (
+      <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <label className="font-medium">Admin Notes:</label>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-9 rounded-md border-primary/30 px-3 text-primary hover:bg-primary/10"
+              onClick={() => {
+                if (selectedComplaint) void openHistory(selectedComplaint);
+              }}
+            >
+              <Clock className="mr-2 h-4 w-4" />
+              View History
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-9 rounded-md border-primary/30 px-3 text-primary hover:bg-primary/10"
+              disabled={!selectedComplaint || isProofUploading}
+              onClick={() => proofInputRef.current?.click()}
+            >
+              <Upload
+                className={`mr-2 h-4 w-4 ${isProofUploading ? "animate-pulse" : ""}`}
+              />
+              {isProofUploading ? "Uploading..." : "Upload Proof Image"}
+            </Button>
+          </div>
+        </div>
+
+        <Textarea
+          value={adminNotes}
+          onChange={(e) => setAdminNotes(e.target.value)}
+          placeholder="Add notes about this request..."
+          rows={3}
+        />
+
+        {selectedComplaint?.resolutionProofImage && (
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground">
+              Resolution proof image
+            </p>
+            <ImageWithFallback
+              src={selectedComplaint.resolutionProofImage}
+              alt="Resolution proof"
+              className="w-full max-h-72 rounded-lg border border-border object-contain bg-background"
+            />
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-2 pt-1">
+          <DialogClose asChild>
+            <Button
+              onClick={handleSaveNotes}
+              size="sm"
+              className="h-9 rounded-md px-4 shadow-sm transition-colors hover:bg-primary/90"
+            >
+              <Save className="mr-2 h-4 w-4" />
+              Save Notes
+            </Button>
+          </DialogClose>
+          <DialogClose asChild>
+            <Button
+              variant="destructive"
+              size="sm"
+              className="h-9 rounded-md px-4 shadow-sm transition-colors hover:bg-destructive/90   "
+              onClick={() => {
+                if (!selectedComplaint) return;
+                setDeleteTarget(selectedComplaint);
+              }}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete Request
+            </Button>
+          </DialogClose>
+        </div>
+      </div>
+    );
+  };
+
+  const activeRequests =
+    typeFilter === "assistance" ? filteredAssistance : filteredComplaints;
+  const statsSource =
+    typeFilter === "assistance" ? baseAssistance : baseComplaints;
+
+  const stats = {
+    total: statsSource.length,
+    pending: statsSource.filter((c) => c.status === "pending").length,
+    inProgress: statsSource.filter((c) => c.status === "in-progress").length,
+    resolved: statsSource.filter((c) => c.status === "resolved").length,
+    rejected: statsSource.filter((c) => c.status === "rejected").length,
+  };
+
+  return (
+    <div className="space-y-6">
+      <input
+        ref={proofInputRef}
+        type="file"
+        accept="image/jpeg,image/jpg,image/png,image/webp"
+        className="sr-only"
+        tabIndex={-1}
+        onChange={handleProofFileChange}
+      />
+
+      <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Request History</DialogTitle>
+            <DialogDescription>
+              {selectedComplaint ? `Timeline for ${selectedComplaint.title}` : "Request timeline"}
+            </DialogDescription>
+          </DialogHeader>
+
+          {historyLoading ? (
+            <div className="py-8 text-center text-muted-foreground">Loading request history...</div>
+          ) : historyError ? (
+            <div role="alert" className="py-8 text-center text-destructive">
+              Unable to load request history: {historyError}
+            </div>
+          ) : requestHistory.length === 0 ? (
+            <div className="py-8 text-center text-muted-foreground">No history entries found for this request.</div>
+          ) : (
+            <div className="space-y-4">
+              {requestHistory.map((entry) => (
+                <div key={entry.id} className="rounded-lg border border-border bg-muted/30 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-foreground">{entry.action}</p>
+                      {(entry.previousValue !== null || entry.newValue !== null) && (
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {entry.previousValue ?? "—"} → {entry.newValue ?? "—"}
+                        </p>
+                      )}
+                      {entry.details && (
+                        <p className="mt-2 text-sm text-foreground whitespace-pre-wrap">{entry.details}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-3 text-xs text-muted-foreground space-y-1">
+                    <p><span className="font-medium text-foreground">By:</span> {entry.performedByName} ({entry.performedByRole})</p>
+                    <p>
+                      {new Date(entry.createdAt).toLocaleString("en-US", {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                        hour12: true,
+                      })}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <div className="bg-gradient-to-r from-secondary to-primary text-secondary-foreground p-4 sm:p-6 rounded-lg">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-xl sm:text-2xl flex items-center gap-2">
+              <Settings className="w-6 h-6" />
+              Admin Dashboard
+            </h1>
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="shrink-0"
+            onClick={() => void onRefresh?.()}
+            disabled={refreshing}
+          >
+            <RefreshCw
+              className={`w-4 h-4 mr-2 ${refreshing ? "animate-spin" : ""}`}
+            />
+            Refresh
+          </Button>
+        </div>
+      </div>
+
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+        <Card
+          className={`cursor-pointer transition-all duration-300 hover:bg-primary/5 hover:border-primary/50 active:scale-95 ${
+            statusFilter === "all" ? "ring-2 ring-primary bg-primary/10" : ""
+          }`}
+          onClick={() => setStatusFilter("all")}
+        >
+          <CardHeader className="pb-2 sm:pb-3">
+            <CardTitle className="text-xs sm:text-sm">Total</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-lg sm:text-2xl text-foreground">
+              {stats.total}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card
+          className={`cursor-pointer transition-all duration-300 hover:bg-yellow-500/5 hover:border-yellow-500/50 active:scale-95 ${
+            statusFilter === "pending"
+              ? "ring-2 ring-yellow-500 bg-yellow-500/10"
+              : ""
+          }`}
+          onClick={() => setStatusFilter("pending")}
+        >
+          <CardHeader className="pb-2 sm:pb-3">
+            <CardTitle className="text-xs sm:text-sm">Pending</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-lg sm:text-2xl text-yellow-600 ">
+              {stats.pending}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card
+          className={`cursor-pointer transition-all duration-300 hover:bg-blue-500/5 hover:border-blue-500/50 active:scale-95 ${
+            statusFilter === "in-progress"
+              ? "ring-2 ring-blue-500 bg-blue-500/10"
+              : ""
+          }`}
+          onClick={() => setStatusFilter("in-progress")}
+        >
+          <CardHeader className="pb-2 sm:pb-3">
+            <CardTitle className="text-xs sm:text-sm">In Progress</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-lg sm:text-2xl text-blue-600 ">
+              {stats.inProgress}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card
+          className={`cursor-pointer transition-all duration-300 hover:bg-green-500/5 hover:border-green-500/50 active:scale-95 ${
+            statusFilter === "resolved"
+              ? "ring-2 ring-green-500 bg-green-500/10"
+              : ""
+          }`}
+          onClick={() => setStatusFilter("resolved")}
+        >
+          <CardHeader className="pb-2 sm:pb-3">
+            <CardTitle className="text-xs sm:text-sm">Resolved</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-lg sm:text-2xl text-green-600 ">
+              {stats.resolved}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card
+          className={`cursor-pointer transition-all duration-300 hover:bg-red-500/5 hover:border-red-500/50 active:scale-95 ${
+            statusFilter === "rejected"
+              ? "ring-2 ring-red-500 bg-red-500/10"
+              : ""
+          }`}
+          onClick={() => setStatusFilter("rejected")}
+        >
+          <CardHeader className="pb-2 sm:pb-3">
+            <CardTitle className="text-xs sm:text-sm">Rejected</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-lg sm:text-2xl text-red-600 ">
+              {stats.rejected}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Heatmap access */}
+      <Card>
+        <CardContent className="py-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Map className="w-5 h-5 text-primary" />
+            <div>
+              <p className="text-sm font-medium">
+                Complaint and Assistance Heatmap
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {
+                  [...complaints, ...assistanceRequests].filter(
+                    (request) =>
+                      (request.latitude != null && request.longitude != null) ||
+                      (request.coordinates?.lat != null &&
+                        request.coordinates?.lng != null),
+                  ).length
+                }{" "}
+                requests with location pins
+              </p>
+            </div>
+          </div>
+          <Button type="button" variant="outline" onClick={onOpenHeatmap}>
+            Open Heatmap Page
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Filters */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg sm:text-xl">Manage Requests</CardTitle>
+          <CardDescription className="text-sm sm:text-base">
+            Filter and update community requests
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant={typeFilter === "complaint" ? "default" : "outline"}
+                onClick={() => setTypeFilter("complaint")}
+              >
+                Complaints
+              </Button>
+              <Button
+                size="sm"
+                variant={typeFilter === "assistance" ? "default" : "outline"}
+                onClick={() => setTypeFilter("assistance")}
+              >
+                Assistance
+              </Button>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">
+                Showing:{" "}
+                {typeFilter === "complaint" ? "Complaints" : "Assistance"}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 sm:gap-4 mb-6">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+              <Input
+                placeholder="Search across all fields (ticket ID, title, description, location, category, status, complainant, respondent, notes)..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 pr-20"
+              />
+              <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
+                {searchTerm && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSearchTerm("")}
+                    className="h-7 w-7 p-0"
+                    title="Clear search"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  title="Search"
+                >
+                  <Search className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-full sm:w-40">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="in-progress">In Progress</SelectItem>
+                  <SelectItem value="resolved">Resolved</SelectItem>
+                  <SelectItem value="rejected">Rejected</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger className="w-full sm:w-44">
+                  <SelectValue placeholder="Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  {availableCategories.map((c) => (
+                    <SelectItem key={c.value} value={c.value}>
+                      {c.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Popover open={datePopoverOpen} onOpenChange={setDatePopoverOpen}>
+                <PopoverTrigger asChild>
+                  <div>
+                    <Button
+                      variant="outline"
+                      className="w-full sm:w-64 justify-start text-left"
+                      type="button"
+                      aria-haspopup="dialog"
+                      aria-expanded={datePopoverOpen}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {dateRange?.from ? (
+                        dateRange.to ? (
+                          <>
+                            {format(dateRange.from, "MMM dd, yyyy")} -{" "}
+                            {format(dateRange.to, "MMM dd, yyyy")}
+                          </>
+                        ) : (
+                          format(dateRange.from, "MMM dd, yyyy")
+                        )
+                      ) : (
+                        "Filter by date range"
+                      )}
+                    </Button>
+                  </div>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <div className="p-3 space-y-3 border-b">
+                    <div>
+                      <Label className="text-xs mb-1">
+                        Manual Date Entry (MM/DD/YY)
+                      </Label>
+                      <div className="flex gap-2 mt-2">
+                        <Input
+                          placeholder="Start: 01/15/25"
+                          value={manualStartDate}
+                          onChange={(e) => setManualStartDate(e.target.value)}
+                          className="text-sm"
+                        />
+                        <Input
+                          placeholder="End: 01/20/25"
+                          value={manualEndDate}
+                          onChange={(e) => setManualEndDate(e.target.value)}
+                          className="text-sm"
+                        />
+                      </div>
+                    </div>
+                    <Button
+                      onClick={handleManualDateApply}
+                      size="sm"
+                      className="w-full"
+                    >
+                      Apply Manual Dates
+                    </Button>
+                  </div>
+
+                  <Calendar
+                    mode="range"
+                    selected={dateRange}
+                    onSelect={setDateRange}
+                    initialFocus
+                    numberOfMonths={2}
+                  />
+
+                  {dateRange?.from && (
+                    <div className="p-3 border-t flex flex-col gap-2">
+                      <p className="text-sm text-muted-foreground text-center">
+                        {dateRange.to
+                          ? `Showing requests from ${format(
+                              dateRange.from,
+                              "MMM dd",
+                            )} to ${format(dateRange.to, "MMM dd, yyyy")}`
+                          : `Showing requests on ${format(
+                              dateRange.from,
+                              "MMM dd, yyyy",
+                            )}`}
+                      </p>
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => {
+                          setDateRange(undefined);
+                          setManualStartDate("");
+                          setManualEndDate("");
+                          setDatePopoverOpen(false);
+                        }}
+                      >
+                        Clear date filter
+                      </Button>
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+
+          {/* Complaints Table - Hide on mobile, show cards instead */}
+          <div className="hidden lg:block">
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Request</TableHead>
+                    <TableHead>Ticket</TableHead>
+                    <TableHead>Complainant</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Location</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Priority</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {activeRequests.map((complaint) => (
+                    <TableRow key={complaint.id}>
+                      <TableCell>
+                        <div className="max-w-48">
+                          <div className="font-medium truncate">
+                            {complaint.title}
+                          </div>
+                          <div className="text-sm text-muted-foreground truncate">
+                            {complaint.description}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <TicketBadge ticketId={complaint.ticketId} showPending />
+                      </TableCell>
+                      <TableCell>
+                        <div className="max-w-32 truncate">
+                          {complaint.userName || "Unknown"}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{complaint.category}</Badge>
+                      </TableCell>
+                      <TableCell className="max-w-32 truncate">
+                        {complaint.location}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          className={`${getStatusColor(
+                            complaint.status,
+                          )} border-0`}
+                        >
+                          <div className="flex items-center space-x-1">
+                            {getStatusIcon(complaint.status)}
+                            <span>{complaint.status}</span>
+                          </div>
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div
+                          className={`w-3 h-3 rounded-full ${getPriorityColor(
+                            complaint.priority,
+                          )}`}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-xs">
+                          <div>
+                            {new Date(
+                              complaint.dateSubmitted,
+                            ).toLocaleDateString()}
+                          </div>
+                          <div className="text-muted-foreground">
+                            {new Date(
+                              complaint.dateSubmitted,
+                            ).toLocaleTimeString("en-US", {
+                              hour: "numeric",
+                              minute: "2-digit",
+                              hour12: true,
+                            })}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedComplaint(complaint);
+                                  setAdminNotes(complaint.adminNotes || "");
+                                  setSelectedPriority(complaint.priority);
+                                }}
+                              >
+                                Manage
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+                              <DialogHeader className="flex-shrink-0">
+                                <DialogTitle>Manage Request</DialogTitle>
+                                <DialogDescription>
+                                  Update status and add administrative notes
+                                </DialogDescription>
+                              </DialogHeader>
+
+                              {selectedComplaint && (
+                                <div className="space-y-4 overflow-y-auto flex-1 pr-2">
+                                  <div>
+                                    <h3 className="font-medium">
+                                      {selectedComplaint.title}
+                                    </h3>
+                                    <div className="mt-2">
+                                      <TicketBadge
+                                        ticketId={selectedComplaint.ticketId}
+                                        showPending
+                                      />
+                                    </div>
+                                    <p className="text-sm text-gray-600 mt-1">
+                                      {selectedComplaint.description}
+                                    </p>
+                                  </div>
+
+                                  <div className="grid grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                      <span className="font-medium">
+                                        Complainant:
+                                      </span>{" "}
+                                      {selectedComplaint.userName || "Unknown"}
+                                    </div>
+                                    <div>
+                                      <span className="font-medium">
+                                        Category:
+                                      </span>{" "}
+                                      {selectedComplaint.category}
+                                    </div>
+                                    <div>
+                                      <span className="font-medium">
+                                        Location:
+                                      </span>{" "}
+                                      {selectedComplaint.location}
+                                    </div>
+                                    <div>
+                                      <span className="font-medium">
+                                        Contact:
+                                      </span>{" "}
+                                      {selectedComplaint.contactInfo}
+                                    </div>
+                                    <div>
+                                      <span className="font-medium">
+                                        Submitted At:
+                                      </span>{" "}
+                                      {new Date(
+                                        selectedComplaint.dateSubmitted,
+                                      ).toLocaleString("en-US", {
+                                        month: "short",
+                                        day: "numeric",
+                                        year: "numeric",
+                                        hour: "numeric",
+                                        minute: "2-digit",
+                                        hour12: true,
+                                      })}
+                                    </div>
+                                    {selectedComplaint.respondent && (
+                                      <div>
+                                        <span className="font-medium">
+                                          Respondent:
+                                        </span>{" "}
+                                        {selectedComplaint.respondent}
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {selectedComplaint.photo && (
+                                    <div>
+                                      <label className="font-medium">
+                                        Photo Evidence:
+                                      </label>
+                                      <div className="mt-2 w-full">
+                                        <ImageWithFallback
+                                          src={selectedComplaint.photo}
+                                          alt="Request evidence"
+                                          className="rounded-lg w-full max-w-full h-auto max-h-[400px] object-contain"
+                                        />
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  <div className="space-y-2">
+                                    <label className="font-medium">
+                                      Update Status:
+                                    </label>
+                                    <div className="flex space-x-2">
+                                      <Button
+                                        variant={
+                                          selectedComplaint.status === "pending"
+                                            ? "default"
+                                            : "outline"
+                                        }
+                                        size="sm"
+                                        onClick={() =>
+                                          handleStatusUpdate(
+                                            selectedComplaint.id,
+                                            "pending",
+                                          )
+                                        }
+                                        className={
+                                          selectedComplaint.status === "pending"
+                                            ? "bg-yellow-500 hover:bg-yellow-600 text-white"
+                                            : ""
+                                        }
+                                      >
+                                        Pending
+                                      </Button>
+                                      <Button
+                                        variant={
+                                          selectedComplaint.status ===
+                                          "in-progress"
+                                            ? "default"
+                                            : "outline"
+                                        }
+                                        size="sm"
+                                        onClick={() =>
+                                          handleStatusUpdate(
+                                            selectedComplaint.id,
+                                            "in-progress",
+                                          )
+                                        }
+                                        className={
+                                          selectedComplaint.status ===
+                                          "in-progress"
+                                            ? "bg-blue-500 hover:bg-blue-600 text-white"
+                                            : ""
+                                        }
+                                      >
+                                        In Progress
+                                      </Button>
+                                      <Button
+                                        variant={
+                                          selectedComplaint.status ===
+                                          "resolved"
+                                            ? "default"
+                                            : "outline"
+                                        }
+                                        size="sm"
+                                        onClick={() =>
+                                          handleStatusUpdate(
+                                            selectedComplaint.id,
+                                            "resolved",
+                                          )
+                                        }
+                                        className={
+                                          selectedComplaint.status ===
+                                          "resolved"
+                                            ? "bg-green-500 hover:bg-green-600 text-white"
+                                            : ""
+                                        }
+                                      >
+                                        Resolved
+                                      </Button>
+                                      <Button
+                                        variant={
+                                          selectedComplaint.status ===
+                                          "rejected"
+                                            ? "default"
+                                            : "outline"
+                                        }
+                                        size="sm"
+                                        onClick={() =>
+                                          handleStatusUpdate(
+                                            selectedComplaint.id,
+                                            "rejected",
+                                          )
+                                        }
+                                        className={
+                                          selectedComplaint.status ===
+                                          "rejected"
+                                            ? "bg-red-500 hover:bg-red-600 text-white"
+                                            : ""
+                                        }
+                                      >
+                                        Rejected
+                                      </Button>
+                                    </div>
+                                  </div>
+
+                                  <div className="space-y-2">
+                                    <label className="font-medium">
+                                      Update Priority:
+                                    </label>
+                                    <div className="flex space-x-2">
+                                      <Button
+                                        variant={
+                                          selectedComplaint.priority === "low"
+                                            ? "default"
+                                            : "outline"
+                                        }
+                                        size="sm"
+                                        onClick={() =>
+                                          handlePriorityUpdate(
+                                            selectedComplaint.id,
+                                            "low",
+                                          )
+                                        }
+                                        className={
+                                          selectedComplaint.priority === "low"
+                                            ? "bg-green-500 hover:bg-green-600 text-white"
+                                            : ""
+                                        }
+                                      >
+                                        Low
+                                      </Button>
+                                      <Button
+                                        variant={
+                                          selectedComplaint.priority ===
+                                          "medium"
+                                            ? "default"
+                                            : "outline"
+                                        }
+                                        size="sm"
+                                        onClick={() =>
+                                          handlePriorityUpdate(
+                                            selectedComplaint.id,
+                                            "medium",
+                                          )
+                                        }
+                                        className={
+                                          selectedComplaint.priority ===
+                                          "medium"
+                                            ? "bg-yellow-500 hover:bg-yellow-600 text-white"
+                                            : ""
+                                        }
+                                      >
+                                        Medium
+                                      </Button>
+                                      <Button
+                                        variant={
+                                          selectedComplaint.priority === "high"
+                                            ? "default"
+                                            : "outline"
+                                        }
+                                        size="sm"
+                                        onClick={() =>
+                                          handlePriorityUpdate(
+                                            selectedComplaint.id,
+                                            "high",
+                                          )
+                                        }
+                                        className={
+                                          selectedComplaint.priority === "high"
+                                            ? "bg-red-500 hover:bg-red-600 text-white"
+                                            : ""
+                                        }
+                                      >
+                                        High
+                                      </Button>
+                                    </div>
+                                  </div>
+
+                                  {renderAdminNotesAndProof()}
+                                </div>
+                              )}
+                            </DialogContent>
+                          </Dialog>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="group text-red-600 bg-transparent hover:bg-transparent hover:text-red-700 transition-all duration-200 hover:scale-110"
+                            onClick={() => setDeleteTarget(complaint)}
+                            aria-label={`Delete request: ${complaint.title}`}
+                            title="Delete Request"
+                          >
+                            <Trash2 className="w-4 h-4 transition-transform duration-200 group-hover:rotate-12" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+
+          {/* Mobile Card View */}
+          <div className="lg:hidden space-y-4">
+            {activeRequests.map((complaint) => (
+              <Card key={complaint.id}>
+                <CardContent className="p-4">
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <div
+                            className={`w-3 h-3 rounded-full ${getPriorityColor(
+                              complaint.priority,
+                            )}`}
+                          />
+                          <h3 className="font-medium truncate">
+                            {complaint.title}
+                          </h3>
+                        </div>
+                        <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
+                          {complaint.description}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <TicketBadge ticketId={complaint.ticketId} showPending />
+                      <Badge variant="outline" className="text-xs">
+                        {complaint.category}
+                      </Badge>
+                      <Badge
+                        className={`${getStatusColor(
+                          complaint.status,
+                        )} border-0 text-xs`}
+                      >
+                        <div className="flex items-center space-x-1">
+                          {getStatusIcon(complaint.status)}
+                          <span>{complaint.status}</span>
+                        </div>
+                      </Badge>
+                    </div>
+
+                    <div className="text-xs text-muted-foreground space-y-1">
+                      <p>
+                        <span className="font-medium">Complainant:</span>{" "}
+                        {complaint.userName || "Unknown"}
+                      </p>
+                      <p>
+                        <span className="font-medium">Location:</span>{" "}
+                        {complaint.location}
+                      </p>
+                      <p>
+                        <span className="font-medium">Submitted:</span>{" "}
+                        {new Date(complaint.dateSubmitted).toLocaleString(
+                          "en-US",
+                          {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                            hour: "numeric",
+                            minute: "2-digit",
+                            hour12: true,
+                          },
+                        )}
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full"
+                            onClick={() => {
+                              setSelectedComplaint(complaint);
+                              setAdminNotes(complaint.adminNotes || "");
+                              setSelectedPriority(complaint.priority);
+                            }}
+                          >
+                            Manage Request
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+                          <DialogHeader className="flex-shrink-0">
+                            <DialogTitle>Manage Request</DialogTitle>
+                            <DialogDescription>
+                              Update status and add administrative notes
+                            </DialogDescription>
+                          </DialogHeader>
+
+                          {selectedComplaint && (
+                            <div className="space-y-4 overflow-y-auto flex-1 pr-2">
+                              <div>
+                                <h3 className="font-medium">
+                                  {selectedComplaint.title}
+                                </h3>
+                                <div className="mt-2">
+                                  <TicketBadge
+                                    ticketId={selectedComplaint.ticketId}
+                                    showPending
+                                  />
+                                </div>
+                                <p className="text-sm text-muted-foreground mt-1">
+                                  {selectedComplaint.description}
+                                </p>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                                <div>
+                                  <span className="font-medium">
+                                    Complainant:
+                                  </span>{" "}
+                                  {selectedComplaint.userName || "Unknown"}
+                                </div>
+                                <div>
+                                  <span className="font-medium">Category:</span>{" "}
+                                  {selectedComplaint.category}
+                                </div>
+                                <div>
+                                  <span className="font-medium">Location:</span>{" "}
+                                  {selectedComplaint.location}
+                                </div>
+                                <div>
+                                  <span className="font-medium">Contact:</span>{" "}
+                                  {selectedComplaint.contactInfo}
+                                </div>
+                                <div>
+                                  <span className="font-medium">
+                                    Submitted At:
+                                  </span>{" "}
+                                  {new Date(
+                                    selectedComplaint.dateSubmitted,
+                                  ).toLocaleString("en-US", {
+                                    month: "short",
+                                    day: "numeric",
+                                    year: "numeric",
+                                    hour: "numeric",
+                                    minute: "2-digit",
+                                    hour12: true,
+                                  })}
+                                </div>
+                                {selectedComplaint.respondent && (
+                                  <div>
+                                    <span className="font-medium">
+                                      Respondent:
+                                    </span>{" "}
+                                    {selectedComplaint.respondent}
+                                  </div>
+                                )}
+                              </div>
+
+                              {selectedComplaint.photo && (
+                                <div>
+                                  <label className="font-medium">
+                                    Photo Evidence:
+                                  </label>
+                                  <div className="mt-2 w-full">
+                                    <ImageWithFallback
+                                      src={selectedComplaint.photo}
+                                      alt="Request evidence"
+                                      className="rounded-lg w-full max-w-full h-auto max-h-[400px] object-contain"
+                                    />
+                                  </div>
+                                </div>
+                              )}
+
+                              <div className="space-y-2">
+                                <label className="font-medium">
+                                  Update Status:
+                                </label>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <Button
+                                    variant={
+                                      selectedComplaint.status === "pending"
+                                        ? "default"
+                                        : "outline"
+                                    }
+                                    size="sm"
+                                    onClick={() =>
+                                      handleStatusUpdate(
+                                        selectedComplaint.id,
+                                        "pending",
+                                      )
+                                    }
+                                    className={
+                                      selectedComplaint.status === "pending"
+                                        ? "bg-yellow-500 hover:bg-yellow-600 text-white"
+                                        : ""
+                                    }
+                                  >
+                                    Pending
+                                  </Button>
+                                  <Button
+                                    variant={
+                                      selectedComplaint.status === "in-progress"
+                                        ? "default"
+                                        : "outline"
+                                    }
+                                    size="sm"
+                                    onClick={() =>
+                                      handleStatusUpdate(
+                                        selectedComplaint.id,
+                                        "in-progress",
+                                      )
+                                    }
+                                    className={
+                                      selectedComplaint.status === "in-progress"
+                                        ? "bg-blue-500 hover:bg-blue-600 text-white"
+                                        : ""
+                                    }
+                                  >
+                                    In Progress
+                                  </Button>
+                                  <Button
+                                    variant={
+                                      selectedComplaint.status === "resolved"
+                                        ? "default"
+                                        : "outline"
+                                    }
+                                    size="sm"
+                                    onClick={() =>
+                                      handleStatusUpdate(
+                                        selectedComplaint.id,
+                                        "resolved",
+                                      )
+                                    }
+                                    className={
+                                      selectedComplaint.status === "resolved"
+                                        ? "bg-green-500 hover:bg-green-600 text-white"
+                                        : ""
+                                    }
+                                  >
+                                    Resolved
+                                  </Button>
+                                  <Button
+                                    variant={
+                                      selectedComplaint.status === "rejected"
+                                        ? "default"
+                                        : "outline"
+                                    }
+                                    size="sm"
+                                    onClick={() =>
+                                      handleStatusUpdate(
+                                        selectedComplaint.id,
+                                        "rejected",
+                                      )
+                                    }
+                                    className={
+                                      selectedComplaint.status === "rejected"
+                                        ? "bg-red-500 hover:bg-red-600 text-white"
+                                        : ""
+                                    }
+                                  >
+                                    Rejected
+                                  </Button>
+                                </div>
+                              </div>
+
+                              <div className="space-y-2">
+                                <label className="font-medium">
+                                  Update Priority:
+                                </label>
+                                <div className="grid grid-cols-3 gap-2">
+                                  <Button
+                                    variant={
+                                      selectedComplaint.priority === "low"
+                                        ? "default"
+                                        : "outline"
+                                    }
+                                    size="sm"
+                                    onClick={() =>
+                                      handlePriorityUpdate(
+                                        selectedComplaint.id,
+                                        "low",
+                                      )
+                                    }
+                                    className={
+                                      selectedComplaint.priority === "low"
+                                        ? "bg-green-500 hover:bg-green-600 text-white"
+                                        : ""
+                                    }
+                                  >
+                                    Low
+                                  </Button>
+                                  <Button
+                                    variant={
+                                      selectedComplaint.priority === "medium"
+                                        ? "default"
+                                        : "outline"
+                                    }
+                                    size="sm"
+                                    onClick={() =>
+                                      handlePriorityUpdate(
+                                        selectedComplaint.id,
+                                        "medium",
+                                      )
+                                    }
+                                    className={
+                                      selectedComplaint.priority === "medium"
+                                        ? "bg-yellow-500 hover:bg-yellow-600 text-white"
+                                        : ""
+                                    }
+                                  >
+                                    Medium
+                                  </Button>
+                                  <Button
+                                    variant={
+                                      selectedComplaint.priority === "high"
+                                        ? "default"
+                                        : "outline"
+                                    }
+                                    size="sm"
+                                    onClick={() =>
+                                      handlePriorityUpdate(
+                                        selectedComplaint.id,
+                                        "high",
+                                      )
+                                    }
+                                    className={
+                                      selectedComplaint.priority === "high"
+                                        ? "bg-red-500 hover:bg-red-600 text-white"
+                                        : ""
+                                    }
+                                  >
+                                    High
+                                  </Button>
+                                </div>
+                              </div>
+
+                              {renderAdminNotesAndProof()}
+                            </div>
+                          )}
+                        </DialogContent>
+                      </Dialog>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        className="group w-full transition-all duration-200 hover:scale-[1.02] hover:shadow-md"
+                        onClick={() => setDeleteTarget(complaint)}
+                      >
+                        <Trash2 className="w-4 h-4 mr-2 transition-transform duration-200 group-hover:rotate-12" />
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {activeRequests.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground">
+              No requests match your current filters
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <AlertDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Request?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete
+              {deleteTarget ? ` \"${deleteTarget.title}\"` : " this request"}.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>
+              No, Keep It
+            </AlertDialogCancel>
+            <AlertDialogAction
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleConfirmDelete}>
+              Yes, Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
