@@ -19,6 +19,8 @@ This guide describes the current TugonPH registration flow. Registration does no
 
 Codes expire after 10 minutes. Resending is subject to a cooldown and a resend limit.
 
+Email delivery is configured in `server/.env` with `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, and `EMAIL_PASSWORD`. For Gmail, use an app password rather than the account's regular password. Port `465` uses implicit TLS; port `587` uses STARTTLS when `EMAIL_SECURE` is omitted. Set `EMAIL_FROM` to the authenticated sender address (or an address authorized by that provider). If delivery fails during registration, the pending account is retained and the signup flow offers a resend after SMTP is configured.
+
 ## Admin account approval
 
 Admins review pending registrations in User Management and can approve or reject each account. The existing `PUT /api/admin/users/:userId/verify-address` endpoint is retained for compatibility with the current admin UI; it changes account status and activation and does not check an address or process an uploaded document.

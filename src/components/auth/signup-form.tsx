@@ -246,7 +246,7 @@ export function SignupForm({ onSwitchToLogin }: SignupFormProps) {
 
     const fullName =
       `${firstName} ${middleName ? middleName + " " : ""}${lastName}`.trim();
-    const { error } = await signUp(
+    const { error, errorCode } = await signUp(
       email,
       password,
       fullName,
@@ -254,6 +254,20 @@ export function SignupForm({ onSwitchToLogin }: SignupFormProps) {
     );
 
     if (error) {
+      if (
+        errorCode === "EMAIL_SERVICE_NOT_CONFIGURED" ||
+        errorCode === "EMAIL_DELIVERY_FAILED"
+      ) {
+        setStep("otp");
+        setCooldown(0);
+        setOtpDigits(["", "", "", "", "", ""]);
+        setOtpError(null);
+        toast.error(
+          "Your account was saved, but the verification email could not be sent. Configure email delivery, then use Resend code.",
+        );
+        setLoading(false);
+        return;
+      }
       if (
         error.toLowerCase().includes("already") ||
         error.toLowerCase().includes("exists")
@@ -375,7 +389,7 @@ export function SignupForm({ onSwitchToLogin }: SignupFormProps) {
   // ── Step 3: Pending Approval Screen ─────────────────────────────────────────
   if (step === "pending") {
     return (
-      <Card className="w-full max-w-md mx-auto">
+      <Card className="w-full max-w-md mx-auto shadow-lg shadow-[#35408E]/15">
         <CardHeader className="text-center">
           <div className="w-16 h-16 rounded-full bg-amber-100  flex items-center justify-center mx-auto mb-4">
             <Clock className="w-8 h-8 text-amber-600 " />
@@ -423,7 +437,7 @@ export function SignupForm({ onSwitchToLogin }: SignupFormProps) {
     const otpFull = otpDigits.join("").length === 6;
 
     return (
-      <Card className="w-full max-w-md mx-auto">
+      <Card className="w-full max-w-md mx-auto shadow-lg shadow-[#35408E]/15">
         <CardHeader className="text-center">
           <div className="w-16 h-16 rounded-full bg-blue-100  flex items-center justify-center mx-auto mb-4">
             <Mail className="w-8 h-8 text-blue-600 " />
@@ -527,7 +541,7 @@ export function SignupForm({ onSwitchToLogin }: SignupFormProps) {
 
   // ── Registration Form ────────────────────────────────────────────────────────
   return (
-    <Card className="w-full max-w-md mx-auto">
+    <Card className="w-full max-w-md mx-auto shadow-lg shadow-[#35408E]/15">
       <CardHeader className="text-center">
         <CardTitle className="text-2xl">Join TugonPH</CardTitle>
         <CardDescription>
@@ -628,7 +642,7 @@ export function SignupForm({ onSwitchToLogin }: SignupFormProps) {
                   setEmail(e.target.value);
                   if (emailError) setEmailError(null);
                 }}
-                placeholder="Enter your email"
+                placeholder="example@gmail.com"
                 className="pl-10"
                 required
               />

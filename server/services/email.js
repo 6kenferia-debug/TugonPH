@@ -14,9 +14,16 @@ function getTransportConfig() {
   const user = process.env.EMAIL_USER;
   const password = process.env.EMAIL_PASSWORD;
   const port = Number(process.env.EMAIL_PORT || 465);
-  const secure = process.env.EMAIL_SECURE !== "false";
+  const configuredSecureValue = process.env.EMAIL_SECURE?.trim().toLowerCase();
+  const configuredSecure = configuredSecureValue || undefined;
+  if (configuredSecure && configuredSecure !== "true" && configuredSecure !== "false") {
+    throw new EmailServiceNotConfiguredError();
+  }
+  const secure = configuredSecure === undefined
+    ? port === 465
+    : configuredSecure.toLowerCase() === "true";
 
-  if (!host || !user || !password) {
+  if (!host || !user || !password || !Number.isInteger(port) || port < 1 || port > 65535) {
     throw new EmailServiceNotConfiguredError();
   }
 
@@ -47,9 +54,15 @@ function formatStatusLabel(value) {
 
 async function sendEmailMessage({ to, subject, text, html, deliveryLabel }) {
   try {
-    const transporter = nodemailer.createTransport(getTransportConfig());
+    const config = getTransportConfig();
+    const transporter = nodemailer.createTransport({
+      host: config.host,
+      port: config.port,
+      secure: config.secure,
+      auth: config.auth,
+    });
     const info = await transporter.sendMail({
-      from: getTransportConfig().from,
+      from: config.from,
       to,
       subject,
       text,

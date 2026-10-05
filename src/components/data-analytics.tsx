@@ -510,9 +510,6 @@ export function DataAnalytics({
             <Trophy className="w-5 h-5 text-amber-500" />
             Insights & Recommendations
           </CardTitle>
-          <CardDescription>
-            Data-driven suggestions to improve service delivery
-          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {(() => {

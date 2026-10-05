@@ -287,9 +287,6 @@ export function UserManagement() {
           <Users className="w-6 h-6" />
           <span>User Management</span>
         </h1>
-        <p className="mt-2 opacity-90 text-sm sm:text-base">
-          Review registrations and manage community member accounts
-        </p>
       </div>
 
       {/* Stats */}
@@ -384,11 +381,6 @@ export function UserManagement() {
           <CardTitle>
             {activeTab === "pending" ? "Pending Approval Requests" : "All Users"}
           </CardTitle>
-          <CardDescription>
-            {activeTab === "pending"
-              ? "Review and approve or reject registrations"
-              : "View and manage all registered users"}
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">

@@ -107,8 +107,13 @@ async function register(req, res, next) {
       otpResendCooldownSeconds: OTP_RESEND_COOLDOWN_SECONDS,
     });
   } catch (error) {
-    if (user && user._id) {
-      await User.findByIdAndDelete(user._id).catch(() => {});
+    if (error && (error.code === "EMAIL_SERVICE_NOT_CONFIGURED" || error.code === "EMAIL_DELIVERY_FAILED")) {
+      user.emailOtpHash = null;
+      user.emailOtpExpiresAt = null;
+      user.emailOtpAttempts = 0;
+      user.emailOtpLastSentAt = null;
+      user.emailOtpResendCount = 0;
+      await user.save();
     }
 
     if (error && error.code === "EMAIL_SERVICE_NOT_CONFIGURED") {
@@ -222,6 +227,13 @@ async function resendVerification(req, res, next) {
       });
     }
 
+    const previousOtp = {
+      emailOtpHash: user.emailOtpHash,
+      emailOtpExpiresAt: user.emailOtpExpiresAt,
+      emailOtpAttempts: user.emailOtpAttempts,
+      emailOtpLastSentAt: user.emailOtpLastSentAt,
+      emailOtpResendCount: user.emailOtpResendCount,
+    };
     const otp = generateOtp();
     user.emailOtpHash = await bcrypt.hash(otp, 12);
     user.emailOtpExpiresAt = new Date(Date.now() + OTP_EXPIRATION_MINUTES * 60 * 1000);
@@ -240,6 +252,8 @@ async function resendVerification(req, res, next) {
       });
     } catch (error) {
       if (error && (error.code === "EMAIL_SERVICE_NOT_CONFIGURED" || error.code === "EMAIL_DELIVERY_FAILED")) {
+        Object.assign(user, previousOtp);
+        await user.save();
         return res.status(503).json({ error: error.message, code: error.code });
       }
       throw error;

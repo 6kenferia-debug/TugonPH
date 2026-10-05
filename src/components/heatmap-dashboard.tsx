@@ -51,9 +51,6 @@ export function HeatmapDashboard({
       <Card>
         <CardHeader>
           <CardTitle>Barangay 407 Heatmap</CardTitle>
-          <CardDescription>
-            Square map layout for a tighter view within Barangay 407 boundaries.
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="w-full max-w-[520px] mx-auto aspect-square">

@@ -10,7 +10,7 @@ import {
 } from "./components/assistance-manager";
 import { LoginForm } from "./components/auth/login-form";
 import { SignupForm } from "./components/auth/signup-form";
-import AuthLayout from "./components/auth/AuthPages/AuthLayout";
+import AuthLayout from "./components/auth/auth-layout";
 import { ProfileManagement } from "./components/auth/profile-management";
 import { UserManagement } from "./components/auth/user-management";
 import { ResidentSettings } from "./components/resident-settings";
@@ -24,6 +24,7 @@ import { DataAnalytics } from "./components/data-analytics";
 import { HeatmapDashboard } from "./components/heatmap-dashboard";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -94,7 +95,8 @@ interface AppNotification {
 
 // No sample data - only real data will be displayed
 
-function AppContent() {  const { user, pendingUser, loading, isAdmin, isGuest, refreshProfile } =
+function AppContent() {
+  const { user, pendingUser, loading, isAdmin, isGuest, refreshProfile } =
     useAuth();
   const {
     complaints,
@@ -1015,11 +1017,6 @@ function AppContent() {  const { user, pendingUser, loading, isAdmin, isGuest, 
                     <Bell className="w-6 h-6" />
                     {"Notifications"}
                   </h1>
-                  <p className="mt-2 opacity-90 text-sm sm:text-base">
-                    {isAdmin
-                      ? "Monitor newly submitted complaints and assistance requests, plus recent updates"
-                      : "Track complaint and assistance request status updates and responses"}
-                  </p>
                 </div>
                 <Button
                   type="button"
@@ -1356,63 +1353,66 @@ function AppContent() {  const { user, pendingUser, loading, isAdmin, isGuest, 
         setShowHistoryDialog(open);
         if (!open) setRequestHistory([]);
       }}>
-        <DialogContent className="w-full max-w-2xl max-h-[85vh] overflow-y-auto px-4 sm:px-6">
-          <DialogHeader>
+        <DialogContent className="flex max-h-[90vh] min-w-0 flex-col overflow-hidden px-4 sm:px-6">
+          <DialogHeader className="min-w-0 shrink-0">
             <DialogTitle>{"Request History"}</DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="break-words [overflow-wrap:anywhere]">
               {selectedComplaint ? `Activity timeline for ${selectedComplaint.title}` : "Activity timeline"}
             </DialogDescription>
           </DialogHeader>
 
-          {historyLoading ? (
-            <div className="py-6 text-center text-muted-foreground">Loading history...</div>
-          ) : historyError ? (
-            <div role="alert" className="py-6 text-center text-destructive">
-              Unable to load request history: {historyError}
-            </div>
-          ) : requestHistory.length === 0 ? (
-            <div className="py-6 text-center text-muted-foreground">No request activity recorded yet.</div>
-          ) : (
-            <div className="space-y-4">
-              {requestHistory.map((entry) => {
-                const valueLabel = (value: string | null) => value && value !== "null" ? value : "—";
-                const entrySummary = entry.details && entry.details.trim() ? entry.details : entry.action;
+          <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain pr-2">
+            {historyLoading ? (
+              <div className="min-w-0 py-6 text-center text-muted-foreground">Loading history...</div>
+            ) : historyError ? (
+              <div role="alert" className="min-w-0 break-words py-6 text-center text-destructive [overflow-wrap:anywhere]">
+                Unable to load request history: {historyError}
+              </div>
+            ) : requestHistory.length === 0 ? (
+              <div className="min-w-0 py-6 text-center text-muted-foreground">No request activity recorded yet.</div>
+            ) : (
+              <div className="space-y-4">
+                {requestHistory.map((entry) => {
+                  const valueLabel = (value: string | null) => value && value !== "null" ? value : "—";
+                  const entrySummary = entry.details && entry.details.trim() ? entry.details : entry.action;
 
-                return (
-                  <div key={entry.id} className="rounded-lg border border-border bg-muted/30 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-medium text-foreground">{entry.action}</p>
-                        {(entry.previousValue !== null || entry.newValue !== null) && (
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            {valueLabel(entry.previousValue)} → {valueLabel(entry.newValue)}
-                          </p>
-                        )}
-                        {entry.details && (
-                          <p className="mt-2 text-sm text-foreground whitespace-pre-wrap">{entrySummary}</p>
-                        )}
+                  return (
+                    <div key={entry.id} className="w-full min-w-0 rounded-lg border border-border bg-muted/30 p-4">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="break-words font-medium text-foreground [overflow-wrap:anywhere]">{entry.action}</p>
+                          {(entry.previousValue !== null || entry.newValue !== null) && (
+                            <p className="mt-1 break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">
+                              {valueLabel(entry.previousValue)} → {valueLabel(entry.newValue)}
+                            </p>
+                          )}
+                          {entry.details && (
+                            <p className="mt-2 whitespace-pre-wrap break-words text-sm text-foreground [overflow-wrap:anywhere]">{entrySummary}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="mt-3 min-w-0 space-y-1 break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                        <p className="break-words [overflow-wrap:anywhere]">
+                          <span className="font-medium text-foreground">By:</span> {entry.performedByName} ({entry.performedByRole})
+                        </p>
+                        <p className="break-words [overflow-wrap:anywhere]">
+                          {new Date(entry.createdAt).toLocaleString("en-US", {
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                            hour: "numeric",
+                            minute: "2-digit",
+                            hour12: true,
+                          })}
+                        </p>
                       </div>
                     </div>
-                    <div className="mt-3 text-xs text-muted-foreground space-y-1">
-                      <p>
-                        <span className="font-medium text-foreground">By:</span> {entry.performedByName} ({entry.performedByRole})
-                      </p>
-                      <p>
-                        {new Date(entry.createdAt).toLocaleString("en-US", {
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric",
-                          hour: "numeric",
-                          minute: "2-digit",
-                          hour12: true,
-                        })}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
         </DialogContent>
       </Dialog>
 

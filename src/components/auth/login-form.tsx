@@ -27,7 +27,8 @@ interface LoginFormProps {
   onSwitchToSignup: () => void;
 }
 
-export function LoginForm({ onSwitchToSignup }: LoginFormProps) {  const [email, setEmail] = useState("");
+export function LoginForm({ onSwitchToSignup }: LoginFormProps) {
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -106,7 +107,7 @@ export function LoginForm({ onSwitchToSignup }: LoginFormProps) {  const [email
   };
 
   return (
-    <Card className="w-full max-w-md mx-auto">
+    <Card className="w-full max-w-md mx-auto shadow-lg shadow-[#35408E]/15">
       <CardHeader className="text-center">
         <CardTitle className="text-2xl">{"Welcome Back"}</CardTitle>
         <CardDescription>
@@ -183,7 +184,7 @@ export function LoginForm({ onSwitchToSignup }: LoginFormProps) {  const [email
                     setAccountStatus(null);
                   }
                 }}
-                placeholder="Enter your email"
+                placeholder="example@gmail.com"
                 className="pl-10"
                 required
               />

@@ -135,7 +135,8 @@ export function AdminPanel({
   onRefresh,
   refreshing = false,
   onOpenHeatmap,
-}: AdminPanelProps) {  const [searchTerm, setSearchTerm] = useState("");
+}: AdminPanelProps) {
+  const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState<"complaint" | "assistance">(
@@ -590,56 +591,59 @@ export function AdminPanel({
       />
 
       <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="flex max-h-[90vh] min-w-0 flex-col overflow-hidden">
+          <DialogHeader className="min-w-0 shrink-0">
             <DialogTitle>Request History</DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="break-words [overflow-wrap:anywhere]">
               {selectedComplaint ? `Timeline for ${selectedComplaint.title}` : "Request timeline"}
             </DialogDescription>
           </DialogHeader>
 
-          {historyLoading ? (
-            <div className="py-8 text-center text-muted-foreground">Loading request history...</div>
-          ) : historyError ? (
-            <div role="alert" className="py-8 text-center text-destructive">
-              Unable to load request history: {historyError}
-            </div>
-          ) : requestHistory.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground">No history entries found for this request.</div>
-          ) : (
-            <div className="space-y-4">
-              {requestHistory.map((entry) => (
-                <div key={entry.id} className="rounded-lg border border-border bg-muted/30 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-medium text-foreground">{entry.action}</p>
-                      {(entry.previousValue !== null || entry.newValue !== null) && (
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          {entry.previousValue ?? "—"} → {entry.newValue ?? "—"}
-                        </p>
-                      )}
-                      {entry.details && (
-                        <p className="mt-2 text-sm text-foreground whitespace-pre-wrap">{entry.details}</p>
-                      )}
+          <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain pr-2">
+            {historyLoading ? (
+              <div className="min-w-0 py-8 text-center text-muted-foreground">Loading request history...</div>
+            ) : historyError ? (
+              <div role="alert" className="min-w-0 break-words py-8 text-center text-destructive [overflow-wrap:anywhere]">
+                Unable to load request history: {historyError}
+              </div>
+            ) : requestHistory.length === 0 ? (
+              <div className="min-w-0 py-8 text-center text-muted-foreground">No history entries found for this request.</div>
+            ) : (
+              <div className="space-y-4">
+                {requestHistory.map((entry) => (
+                  <div key={entry.id} className="w-full min-w-0 rounded-lg border border-border bg-muted/30 p-4">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="break-words font-medium text-foreground [overflow-wrap:anywhere]">{entry.action}</p>
+                        {(entry.previousValue !== null || entry.newValue !== null) && (
+                          <p className="mt-1 break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">
+                            {entry.previousValue ?? "—"} → {entry.newValue ?? "—"}
+                          </p>
+                        )}
+                        {entry.details && (
+                          <p className="mt-2 whitespace-pre-wrap break-words text-sm text-foreground [overflow-wrap:anywhere]">{entry.details}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="mt-3 min-w-0 space-y-1 break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                      <p className="break-words [overflow-wrap:anywhere]"><span className="font-medium text-foreground">By:</span> {entry.performedByName} ({entry.performedByRole})</p>
+                      <p className="break-words [overflow-wrap:anywhere]">
+                        {new Date(entry.createdAt).toLocaleString("en-US", {
+                          year: "numeric",
+                          month: "long",
+                          day: "numeric",
+                          hour: "numeric",
+                          minute: "2-digit",
+                          hour12: true,
+                        })}
+                      </p>
                     </div>
                   </div>
-                  <div className="mt-3 text-xs text-muted-foreground space-y-1">
-                    <p><span className="font-medium text-foreground">By:</span> {entry.performedByName} ({entry.performedByRole})</p>
-                    <p>
-                      {new Date(entry.createdAt).toLocaleString("en-US", {
-                        year: "numeric",
-                        month: "long",
-                        day: "numeric",
-                        hour: "numeric",
-                        minute: "2-digit",
-                        hour12: true,
-                      })}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </div>
+
         </DialogContent>
       </Dialog>
 
@@ -790,9 +794,6 @@ export function AdminPanel({
       <Card>
         <CardHeader>
           <CardTitle className="text-lg sm:text-xl">Manage Requests</CardTitle>
-          <CardDescription className="text-sm sm:text-base">
-            Filter and update community requests
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-between mb-4">

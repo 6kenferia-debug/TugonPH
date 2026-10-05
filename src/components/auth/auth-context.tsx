@@ -35,7 +35,7 @@ interface AuthContextType {
     password: string,
     name: string,
     phoneNumber?: string,
-  ) => Promise<{ error?: string; pending?: boolean }>;
+  ) => Promise<{ error?: string; errorCode?: string; pending?: boolean }>;
   sendOtp: (email: string) => Promise<{ error?: string }>;
   verifyEmailOtp: (
     email: string,
@@ -137,6 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       return {
         error: error instanceof Error ? error.message : "Registration failed.",
+        errorCode: error instanceof ApiError ? error.code : undefined,
       };
     }
   };
