@@ -172,7 +172,7 @@ function AppContent() {
   );
 
   const notificationsStorageKey = user
-    ? `barangaycare.notifications.${isAdmin ? "admin" : "user"}.${user.id}`
+    ? `tugonph.notifications.${isAdmin ? "admin" : "user"}.${user.id}`
     : null;
 
   const persistNotifications = (next: AppNotification[]) => {

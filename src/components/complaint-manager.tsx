@@ -64,7 +64,7 @@ export function ComplaintProvider({ children }: { children: React.ReactNode }) {
   const hasConnectedRef = useRef(false);
 
   const getCacheKey = (userId: string, admin: boolean) =>
-    `barangaycare.complaints.${admin ? "admin" : "user"}.${userId}`;
+    `tugonph.complaints.${admin ? "admin" : "user"}.${userId}`;
 
   const readCachedComplaints = (cacheKey: string): Complaint[] | null => {
     try {

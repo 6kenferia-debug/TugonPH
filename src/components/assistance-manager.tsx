@@ -58,7 +58,7 @@ export function AssistanceProvider({ children }: { children: React.ReactNode }) 
   const hasConnectedRef = useRef(false);
 
   const getCacheKey = (userId: string, admin: boolean) =>
-    `barangaycare.assistance.${admin ? "admin" : "user"}.${userId}`;
+    `tugonph.assistance.${admin ? "admin" : "user"}.${userId}`;
   const cacheKey = user ? getCacheKey(user.id, isAdmin) : null;
 
   const readCache = (key: string): AssistanceRequest[] | null => {
