@@ -16,6 +16,7 @@ const userSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true, maxlength: 160 },
     phoneNumber: { type: String, default: null, trim: true, match: /^\d{11}$/ },
     profilePictureUrl: { type: String, default: null },
+    emailNotifications: { type: Boolean, default: true },
     isActive: { type: Boolean, default: false, index: true },
     accountStatus: {
       type: String,
@@ -34,6 +35,13 @@ const userSchema = new mongoose.Schema(
     emailOtpLastSentAt: { type: Date, default: null, select: false },
     emailOtpResendCount: { type: Number, default: 0, select: false },
     emailOtpVerifiedAt: { type: Date, default: null, select: false },
+    passwordRecoveryOtpHash: { type: String, default: null, select: false },
+    passwordRecoveryOtpExpiresAt: { type: Date, default: null, select: false },
+    passwordRecoveryOtpAttempts: { type: Number, default: 0, select: false },
+    passwordRecoveryOtpLastSentAt: { type: Date, default: null, select: false },
+    passwordRecoveryOtpResendCount: { type: Number, default: 0, select: false },
+    passwordRecoveryTokenHash: { type: String, default: null, select: false, index: true },
+    passwordRecoveryTokenExpiresAt: { type: Date, default: null, select: false },
     addressRejectionReason: { type: String, default: null },
   },
   {
@@ -50,6 +58,13 @@ const userSchema = new mongoose.Schema(
         delete value.emailOtpLastSentAt;
         delete value.emailOtpResendCount;
         delete value.emailOtpVerifiedAt;
+        delete value.passwordRecoveryOtpHash;
+        delete value.passwordRecoveryOtpExpiresAt;
+        delete value.passwordRecoveryOtpAttempts;
+        delete value.passwordRecoveryOtpLastSentAt;
+        delete value.passwordRecoveryOtpResendCount;
+        delete value.passwordRecoveryTokenHash;
+        delete value.passwordRecoveryTokenExpiresAt;
         return value;
       },
     },

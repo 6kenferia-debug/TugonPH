@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Card,
   CardContent,
@@ -21,6 +21,9 @@ import {
   Calendar,
   RefreshCw,
   Download,
+  ChevronDown,
+  FileSpreadsheet,
+  FileText,
   Trophy,
   Clock,
   Heart,
@@ -32,6 +35,12 @@ import {
   RotateCw,
   Info,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
 import {
   BarChart,
   Bar,
@@ -241,7 +250,12 @@ function buildVolumeOverTime(
 function buildStatusPie(items: { status: string }[]) {
   const map: Record<string, number> = {};
   for (const i of items) map[i.status] = (map[i.status] ?? 0) + 1;
-  return Object.entries(map).map(([name, value]) => ({ name, value }));
+  const statusOrder = ["pending", "in-progress", "rejected", "resolved"];
+  return Object.entries(map)
+    .map(([name, value]) => ({ name, value }))
+    .sort(
+      (a, b) => statusOrder.indexOf(a.name) - statusOrder.indexOf(b.name),
+    );
 }
 
 export function DataAnalytics({
@@ -250,6 +264,7 @@ export function DataAnalytics({
   onRefresh,
   refreshing = false,
 }: DataAnalyticsProps) {
+  const printRef = useRef<HTMLDivElement>(null);
   const [timePeriod, setTimePeriod] = useState<TimePeriod>("monthly");
   const [activeTab, setActiveTab] = useState<
     "overview" | "complaints" | "assistance"
@@ -298,7 +313,7 @@ export function DataAnalytics({
     if (onRefresh) await onRefresh();
   };
 
-  const handleExportData = async () => {
+  const handleExportData = () => {
     const headers = [
       "Type",
       "Title",
@@ -339,19 +354,184 @@ export function DataAnalytics({
     );
     const csv = [headers.join(","), ...cRows, ...aRows].join("\n");
     const fileName = `tugonph-${timePeriod}-${new Date().toISOString().split("T")[0]}.csv`;
-    try {
-      const blob = new Blob(["\uFEFF" + csv], {
-        type: "text/csv;charset=utf-8",
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileName;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      /* silent */
+    const blob = new Blob(["\uFEFF" + csv], {
+      type: "text/csv;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const handlePrint = () => {
+    const printContent = printRef.current;
+    if (!printContent) return;
+
+    const printWindow = window.open("", "_blank", "width=1200,height=900");
+    if (!printWindow) {
+      window.alert("Please allow pop-ups to export the analytics dashboard as PDF.");
+      return;
     }
+
+    const headMarkup = Array.from(
+      document.querySelectorAll("style, link[rel='stylesheet']"),
+    )
+      .map((node) => node.outerHTML)
+      .join("");
+    const printContentCopy = printContent.cloneNode(true) as HTMLDivElement;
+    printContentCopy
+      .querySelectorAll<SVGTextElement>(".analytics-pie-label")
+      .forEach((label) => {
+        const svg = label.ownerSVGElement;
+        if (!svg) return;
+
+        const viewBoxWidth =
+          svg.viewBox.baseVal.width || Number(svg.getAttribute("width"));
+        const labelX = Number(label.getAttribute("x"));
+        if (viewBoxWidth > 0 && Number.isFinite(labelX)) {
+          label.setAttribute(
+            "text-anchor",
+            labelX > viewBoxWidth / 2 ? "end" : "start",
+          );
+        }
+      });
+    const exportedAt = new Intl.DateTimeFormat("en-US", {
+      dateStyle: "long",
+      timeStyle: "short",
+    }).format(new Date());
+    const tabLabel = activeTab.charAt(0).toUpperCase() + activeTab.slice(1);
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <base href="${document.baseURI}" />
+          <title>Data Analytics Report</title>
+          ${headMarkup}
+          <style>
+            @page {
+              size: A4 landscape;
+              margin: 10mm;
+            }
+
+            * {
+              box-sizing: border-box;
+              print-color-adjust: exact;
+              -webkit-print-color-adjust: exact;
+            }
+
+            body {
+              margin: 0;
+              background: #fff;
+              color: #1f2937;
+              font-family: Arial, Helvetica, sans-serif;
+            }
+
+            .report-shell {
+              width: 100%;
+              padding: 12px;
+            }
+
+            .report-header {
+              margin-bottom: 16px;
+              padding-bottom: 10px;
+              border-bottom: 1px solid #d1d5db;
+            }
+
+            .report-header h1 {
+              margin: 0 0 6px;
+              font-size: 26px;
+              font-weight: 700;
+            }
+
+            .report-header p {
+              margin: 0;
+              color: #6b7280;
+              font-size: 12px;
+              line-height: 1.5;
+            }
+
+            .analytics-print-content > .grid:first-child {
+              grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
+
+            .analytics-print-content > .grid {
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+              gap: 24px;
+            }
+
+            .analytics-print-content > .grid > [class*="col-span-2"] {
+              grid-column: span 2;
+            }
+
+            .analytics-print-content {
+              display: flex;
+              flex-direction: column;
+              gap: 24px;
+            }
+
+            .analytics-print-content [class*="shadow"] {
+              box-shadow: none !important;
+            }
+
+            .analytics-print-content [data-slot="card"],
+            .analytics-print-content .rounded-lg {
+              break-inside: avoid;
+              page-break-inside: avoid;
+            }
+
+            .analytics-print-content .recharts-responsive-container {
+              min-width: 0 !important;
+              max-width: 100% !important;
+            }
+
+            .analytics-print-content svg {
+              max-width: 100% !important;
+              overflow: visible !important;
+            }
+
+            .analytics-print-content .analytics-pie-label {
+              font-size: 10px;
+            }
+
+            @media print {
+              .report-shell {
+                padding: 0;
+              }
+
+              .analytics-print-content > .grid:first-child {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+              }
+
+              .analytics-print-content > .grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <main class="report-shell">
+            <header class="report-header">
+              <h1>Data Analytics Report</h1>
+              <p>${tabLabel} dashboard · ${timePeriod} view</p>
+              <p>Generated: ${exportedAt}</p>
+            </header>
+            <section class="analytics-print-content">
+              ${printContentCopy.innerHTML}
+            </section>
+          </main>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
   };
 
   const tabs = [
@@ -384,14 +564,25 @@ export function DataAnalytics({
               />
               Refresh
             </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => void handleExportData()}
-            >
-              <Download className="w-4 h-4 mr-1" />
-              Export
-            </Button>
+            <DropdownMenu modal={false}>
+              <DropdownMenuTrigger asChild>
+                <Button variant="secondary" size="sm">
+                  <Download className="w-4 h-4 mr-1" />
+                  Export
+                  <ChevronDown className="w-4 h-4 ml-1" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={handleExportData}>
+                  <FileSpreadsheet className="w-4 h-4" />
+                  Export as .csv
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={handlePrint}>
+                  <FileText className="w-4 h-4" />
+                  Export as .pdf
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>
@@ -434,6 +625,7 @@ export function DataAnalytics({
         </div>
       </div>
 
+      <div ref={printRef} className="flex flex-col gap-6">
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <Card className="border-2 border-indigo-200 shadow-md bg-card">
@@ -510,7 +702,10 @@ export function DataAnalytics({
       </div>
 
       {/* Insights & Suggestions Section */}
-      <Card className="border-2 border-purple-200 shadow-md bg-card">
+      <Card
+        className="border-2 border-purple-200 shadow-md bg-card"
+        style={{ order: 1 }}
+      >
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Trophy className="w-5 h-5 text-amber-500" />
@@ -743,6 +938,7 @@ export function DataAnalytics({
                       labelLine={false}
                       label={({ name, percent, x, y, textAnchor }) => (
                         <text
+                          className="analytics-pie-label"
                           x={x}
                           y={y}
                           textAnchor={textAnchor}
@@ -798,6 +994,7 @@ export function DataAnalytics({
                       labelLine={false}
                       label={({ name, percent, x, y, textAnchor }) => (
                         <text
+                          className="analytics-pie-label"
                           x={x}
                           y={y}
                           textAnchor={textAnchor}
@@ -1155,6 +1352,7 @@ export function DataAnalytics({
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }

@@ -22,6 +22,7 @@ interface User {
   accountStatus?: string;
   addressRejectionReason?: string;
   emailVerified?: boolean;
+  emailNotifications?: boolean;
 }
 
 interface AuthContextType {
@@ -45,6 +46,21 @@ interface AuthContextType {
     email: string,
     password: string,
   ) => Promise<{ error?: string; accountStatus?: string }>;
+  requestPasswordRecovery: (email: string) => Promise<{ error?: string; errorCode?: string }>;
+  verifyPasswordRecoveryOtp: (
+    email: string,
+    otp: string,
+  ) => Promise<{ resetToken?: string; error?: string; errorCode?: string }>;
+  resetPassword: (
+    resetToken: string,
+    password: string,
+    confirmPassword: string,
+  ) => Promise<{ error?: string; errorCode?: string }>;
+  changePassword: (
+    currentPassword: string,
+    newPassword: string,
+    confirmPassword: string,
+  ) => Promise<{ error?: string; errorCode?: string }>;
   signInWithGoogle: () => Promise<{ error?: string }>;
   signInWithFacebook: () => Promise<{ error?: string }>;
   loginAsGuest: () => void;
@@ -53,14 +69,13 @@ interface AuthContextType {
     name: string,
     phoneNumber?: string,
   ) => Promise<{ error?: string }>;
+  updateEmailNotifications: (enabled: boolean) => Promise<{ error?: string }>;
   uploadProfilePicture: (file: File) => Promise<{ error?: string }>;
   deleteAccount: () => Promise<{ error?: string }>;
   refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-const profileApiUnavailable =
-  "Profile changes are not available until the MongoDB profile API is migrated.";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -207,6 +222,77 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const requestPasswordRecovery = async (email: string) => {
+    try {
+      await api.post(
+        "/auth/password-recovery/request",
+        { email },
+        { auth: false },
+      );
+      return {};
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : "Unable to request a password recovery code.",
+        errorCode: error instanceof ApiError ? error.code : undefined,
+      };
+    }
+  };
+
+  const verifyPasswordRecoveryOtp = async (email: string, otp: string) => {
+    try {
+      const result = await api.post<{ resetToken: string }>(
+        "/auth/password-recovery/verify",
+        { email, otp },
+        { auth: false },
+      );
+      return { resetToken: result.resetToken };
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : "Password recovery verification failed.",
+        errorCode: error instanceof ApiError ? error.code : undefined,
+      };
+    }
+  };
+
+  const resetPassword = async (
+    resetToken: string,
+    password: string,
+    confirmPassword: string,
+  ) => {
+    try {
+      await api.post(
+        "/auth/password-recovery/reset",
+        { resetToken, password, confirmPassword },
+        { auth: false },
+      );
+      return {};
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : "Password reset failed.",
+        errorCode: error instanceof ApiError ? error.code : undefined,
+      };
+    }
+  };
+
+  const changePassword = async (
+    currentPassword: string,
+    newPassword: string,
+    confirmPassword: string,
+  ) => {
+    try {
+      await api.put(
+        "/auth/password",
+        { currentPassword, newPassword, confirmPassword },
+      );
+      return {};
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : "Password change failed.",
+        errorCode: error instanceof ApiError ? error.code : undefined,
+      };
+    }
+  };
+
   const signInWithGoogle = async () => ({
     error: "Google sign-in is not configured for MongoDB authentication.",
   });
@@ -235,7 +321,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsAdmin(false);
   };
 
-  const updateProfile = async () => ({ error: profileApiUnavailable });
+  const updateProfile = async (name: string, phoneNumber?: string) => {
+    try {
+      const { profile } = await api.put<{ profile: User }>("/auth/profile", {
+        name,
+        phoneNumber: phoneNumber ?? "",
+      });
+      setUser(profile);
+      return {};
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : "Profile update failed.",
+      };
+    }
+  };
+
+  const updateEmailNotifications = async (enabled: boolean) => {
+    try {
+      const { profile } = await api.put<{ profile: User }>("/auth/notifications", {
+        emailNotifications: enabled,
+      });
+      setUser(profile);
+      return {};
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : "Email notification settings update failed.",
+      };
+    }
+  };
+
   const uploadProfilePicture = async (file: File) => {
     if (!user) return { error: "Not authenticated" };
     try {
@@ -252,7 +366,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const deleteAccount = async () => ({ error: profileApiUnavailable });
+  const deleteAccount = async () => {
+    try {
+      await api.delete<{ message: string }>("/auth/profile");
+      return {};
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : "Account deletion failed.",
+      };
+    }
+  };
 
   const refreshProfile = async () => {
     if (!getAuthToken()) return;
@@ -278,11 +401,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     sendOtp,
     verifyEmailOtp,
     signIn,
+    requestPasswordRecovery,
+    verifyPasswordRecoveryOtp,
+    resetPassword,
+    changePassword,
     signInWithGoogle,
     signInWithFacebook,
     loginAsGuest,
     signOut,
     updateProfile,
+    updateEmailNotifications,
     uploadProfilePicture,
     deleteAccount,
     refreshProfile,

@@ -1,6 +1,6 @@
 # TugonPH
 
-A barangay service management system built with React, TypeScript, Vite, Express, MongoDB, JWT authentication, and local filesystem storage. TugonPH helps residents and guests submit complaints or assistance requests, while administrators manage submissions, verify accounts, review analytics, and monitor request locations in real time.
+A barangay service management system built with React, TypeScript, Vite, Express, MongoDB, JWT authentication, and local filesystem storage. TugonPH helps residents and guests submit complaints or assistance requests, while administrators manage submissions, verify accounts, review analytics, and monitor request locations.
 
 ![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)
 ![React](https://img.shields.io/badge/React-18.3.1-61dafb.svg)
@@ -16,7 +16,7 @@ A barangay service management system built with React, TypeScript, Vite, Express
 - **Unified Dashboard** - View complaints and assistance requests together with searchable, filterable request lists and combined status totals.
 - **Status Tracking** - Track pending, in-progress, resolved, and rejected requests with admin notes.
 - **Web Notifications** - Receive complaint and assistance activity updates with unread/read tracking.
-- **Profile and Settings** - Manage profile details, notifications, theme, and resident settings.
+- **Profile and Settings** - Manage profile details, email notifications, password, and account access.
 
 ### For Guests
 
@@ -37,7 +37,7 @@ A barangay service management system built with React, TypeScript, Vite, Express
 - **Role-Based Access Control** - Separate resident, guest, and admin capabilities.
 - **Pending Approval Enforcement** - New verified registrations remain pending until admin approval.
 - **Strict Contact Validation** - Contact numbers are normalized and validated as 11-digit numeric values.
-- **Real-Time Sync** - Authenticated residents receive changes for their own complaints and assistance requests; admins receive all request changes through authenticated polling. REST and MongoDB remain the source of truth.
+- **Request Update Sync** - Authenticated polling detects complaint and assistance changes; residents receive their own changes, while admins receive all changes. REST and MongoDB remain the source of truth.
 - **Responsive Interface** - Optimized for desktop and mobile layouts.
 
 ## Tech Stack
@@ -102,9 +102,9 @@ A barangay service management system built with React, TypeScript, Vite, Express
 The backend connects only to MongoDB Atlas using `MONGODB_URI` from `server/.env`; there is no local database fallback. In Atlas, allow the machine's public IP under Network Access and create a database user under Database Access.
 If Node.js reports `querySrv ECONNREFUSED` while resolving the Atlas hostname, set `MONGODB_DNS_SERVERS` in `server/.env` to a trusted DNS resolver IP. The example file shows the optional setting.
 
-### Realtime
+### Request update polling
 
-The frontend checks for request changes every seven seconds using its existing JWT. Residents receive only their own request changes, while admins receive changes for all requests. The API returns request identifiers and timestamps only; the REST API remains the source of request data.
+The frontend checks for complaint and assistance request changes every seven seconds using its existing JWT. Residents receive only their own request changes, while admins receive changes for all requests. Polling responses contain request IDs, user IDs, and update timestamps; when a change is detected, the app reloads request data from the REST API. MongoDB and REST remain the source of truth. See [the integration mapping and test plan](./docs/integration-testing.md) for the data flow and verification cases.
 
 ## Running the Application
 
@@ -146,7 +146,8 @@ npm run build
 ```text
 TugonPH/
 |-- docs/
-|   `-- address-verification-setup.md
+|   |-- address-verification-setup.md
+|   `-- integration-testing.md
 |-- public/                          # Static public assets
 |-- src/
 |   |-- components/
@@ -154,9 +155,9 @@ TugonPH/
 |   |   |-- ui/                      # Reusable Radix/shadcn-style UI components
 |   |   |-- admin-panel.tsx          # Admin complaint and assistance management
 |   |   |-- assistance-form.tsx      # Assistance request submission
-|   |   |-- assistance-manager.tsx   # Assistance request state and realtime sync
+|   |   |-- assistance-manager.tsx   # Assistance request state and polling-based sync
 |   |   |-- complaint-form.tsx       # Complaint submission
-|   |   |-- complaint-manager.tsx    # Complaint state and realtime sync
+|   |   |-- complaint-manager.tsx    # Complaint state and polling-based sync
 |   |   |-- data-analytics.tsx       # Complaint and assistance analytics
 |   |   |-- heatmap-dashboard.tsx    # Combined heatmap page
 |   |   |-- heatmap-panel.tsx        # Leaflet heatmap rendering
@@ -175,7 +176,6 @@ TugonPH/
 |   |-- middleware/
 |   |-- models/
 |   |-- routes/
-|   |-- realtime/
 |   `-- server.js
 |-- package.json
 |-- vite.config.ts
@@ -196,7 +196,7 @@ TugonPH/
 - Submit and view own complaints.
 - Submit and view own assistance requests.
 - Track request status and admin responses.
-- Receive realtime updates for relevant request activity.
+- Receive polling-based updates for relevant request activity.
 - Update profile and settings.
 
 ### Admin
@@ -216,7 +216,7 @@ TugonPH/
 - Verify the request payload includes a title, category, description, address, required photo/document, and valid 11-digit contact number.
 - Check the API response for validation or permission errors.
 
-### Requests do not update in real time
+### Requests do not update after polling
 
 - Confirm the backend API is running and MongoDB is connected.
 - Restart the client after a token expiry or logout/login cycle.

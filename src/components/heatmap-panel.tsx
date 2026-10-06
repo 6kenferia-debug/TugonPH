@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { MapPin, RefreshCw } from "lucide-react";
 import "leaflet/dist/leaflet.css";
+import heatPluginUrl from "leaflet.heat/dist/leaflet-heat.js?url";
 import {
   ASSISTANCE_CATEGORIES,
   COMPLAINT_CATEGORIES,
@@ -36,12 +37,8 @@ interface HeatmapPanelProps {
   minZoom?: number;
 }
 
-// Initial heatmap focus: Barangay 407, Zone 42, District IV, Sampaloc, Manila.
-const CENTER: [number, number] = [14.6038, 120.9904];
-const BOUNDS: [[number, number], [number, number]] = [
-  [14.58, 120.972], // SW
-  [14.688, 120.997], // NE
-];
+// Initial heatmap focus.
+const CENTER: [number, number] = [14.603946, 120.994541];
 const POLYGON_COORDS: [number, number][] = [
   [14.6828, 120.9788],
   [14.6838, 120.9818],
@@ -137,12 +134,24 @@ const CATEGORY_INTENSITY = CATEGORY_OPTIONS.reduce<Record<string, number>>(
 const POINTS_PANE = "complaint-points-pane";
 
 function loadLeafletHeat(): Promise<void> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     if ((window as any).L?.heatLayer) {
       resolve();
       return;
     }
-    import("leaflet.heat").then(() => resolve()).catch(() => resolve());
+
+    const script = document.createElement("script");
+    script.src = heatPluginUrl;
+    script.onload = () => {
+      if ((window as any).L?.heatLayer) {
+        resolve();
+      } else {
+        reject(new Error("Leaflet heat plugin did not register its layer."));
+      }
+    };
+    script.onerror = () =>
+      reject(new Error("Leaflet heat plugin failed to load."));
+    document.head.appendChild(script);
   });
 }
 
@@ -394,23 +403,7 @@ export function HeatmapPanel({
       pointLayer.addTo(map);
       pointLayerRef.current = pointLayer;
 
-      // Auto-fly to the bounding box of visible points
-      if (cat !== "all" && points.length > 0) {
-        const lats = points.map((p) => p.lat);
-        const lngs = points.map((p) => p.lng);
-        const sw: [number, number] = [
-          Math.min(...lats) - 0.001,
-          Math.min(...lngs) - 0.001,
-        ];
-        const ne: [number, number] = [
-          Math.max(...lats) + 0.001,
-          Math.max(...lngs) + 0.001,
-        ];
-        map.fitBounds([sw, ne], { maxZoom: 17, animate: true, duration: 0.6 });
-      } else {
-        // Zoom out to show all of Marulas
-        map.flyTo(CENTER, 15, { animate: true, duration: 0.6 });
-      }
+      map.flyTo(CENTER, 15.64, { animate: true, duration: 0.6 });
     },
     [buildPoints],
   );
@@ -433,11 +426,9 @@ export function HeatmapPanel({
 
       const map = L.map(mapContainerRef.current!, {
         center: CENTER,
-        zoom: 15,
+        zoom: 15.64,
         minZoom,
         maxZoom: 19,
-        maxBounds: BOUNDS,
-        maxBoundsViscosity: 1.0,
         zoomControl: true,
         attributionControl: true,
       });

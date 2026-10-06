@@ -232,9 +232,11 @@ async function update(req, res) {
   const statusChanged = updates.status !== undefined && String(updates.status) !== String(previousStatus);
   if (statusChanged && assistanceRequest.userId) {
     try {
-      const user = await User.findById(assistanceRequest.userId).select("email");
+      const user = await User.findById(assistanceRequest.userId).select("email emailNotifications");
       if (!user?.email) {
         console.warn(`Skipping assistance status email for ${assistanceRequest.id}: no registered user email found.`);
+      } else if (user.emailNotifications === false) {
+        console.info(`Skipping assistance status email for ${assistanceRequest.id}: email notifications are disabled.`);
       } else {
         await sendStatusUpdateEmail({
           email: user.email,

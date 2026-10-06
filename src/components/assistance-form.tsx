@@ -189,7 +189,9 @@ export function AssistanceForm({ onSubmit }: AssistanceFormProps) {  const [tit
         <CardContent className="mt-6 px-4 sm:px-6 pb-8">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="assist-title">{"Title of Request"}</Label>
+              <Label htmlFor="assist-title">
+                {"Title of Request"} <span className="text-destructive">*</span>
+              </Label>
               <Input
                 id="assist-title"
                 value={title}
@@ -200,7 +202,9 @@ export function AssistanceForm({ onSubmit }: AssistanceFormProps) {  const [tit
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="assist-category">{"Category"}</Label>
+              <Label htmlFor="assist-category">
+                {"Category"} <span className="text-destructive">*</span>
+              </Label>
               <Select value={category} onValueChange={setCategory} required>
                 <SelectTrigger>
                   <SelectValue placeholder={"Select assistance type"} />
@@ -218,6 +222,8 @@ export function AssistanceForm({ onSubmit }: AssistanceFormProps) {  const [tit
             <div className="space-y-2">
               <Label htmlFor="assist-description">
                 {"Description"}
+                {" "}
+                <span className="text-destructive">*</span>
               </Label>
               <Textarea
                 id="assist-description"
@@ -230,7 +236,9 @@ export function AssistanceForm({ onSubmit }: AssistanceFormProps) {  const [tit
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="assist-location">{"Address"}</Label>
+              <Label htmlFor="assist-location">
+                {"Address"} <span className="text-destructive">*</span>
+              </Label>
               <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
                 <div className="flex-1 relative">
                   <Input
@@ -262,7 +270,9 @@ export function AssistanceForm({ onSubmit }: AssistanceFormProps) {  const [tit
             </div>
 
             <div className="space-y-2">
-              <Label>{"Photo Evidence"}</Label>
+              <Label>
+                {"Photo Evidence"} <span className="text-destructive">*</span>
+              </Label>
               <div className="border-2 border-dashed border-sky-200 bg-sky-50/70   rounded-lg p-4 sm:p-6 text-center">
                 <input
                   ref={fileInputRef}
@@ -319,6 +329,8 @@ export function AssistanceForm({ onSubmit }: AssistanceFormProps) {  const [tit
             <div className="space-y-2">
               <Label htmlFor="assist-contact">
                 {"Contact Number"}
+                {" "}
+                <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="assist-contact"

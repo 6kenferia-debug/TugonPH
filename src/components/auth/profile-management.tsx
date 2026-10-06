@@ -9,24 +9,12 @@ import {
   CardHeader,
   CardTitle,
 } from "../ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "../ui/dialog";
-import { Alert, AlertDescription } from "../ui/alert";
 import { Separator } from "../ui/separator";
 import {
   User,
   Phone,
   Mail,
-  Trash2,
   Save,
-  AlertTriangle,
   Camera,
   Upload,
   Loader2,
@@ -38,8 +26,6 @@ export function ProfileManagement() {
   const {
     user,
     updateProfile,
-    deleteAccount,
-    signOut,
     isAdmin,
     uploadProfilePicture,
   } = useAuth();
@@ -49,7 +35,6 @@ export function ProfileManagement() {
   const [phoneNumberError, setPhoneNumberError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const normalizePhone = (value: string) =>
     value.replace(/\D/g, "").slice(0, 11);
@@ -88,20 +73,6 @@ export function ProfileManagement() {
       setEditMode(false);
     }
     setLoading(false);
-  };
-
-  const handleDeleteAccount = async () => {
-    setLoading(true);
-    const { error } = await deleteAccount();
-
-    if (error) {
-      toast.error(error);
-    } else {
-      toast.success("Account deleted successfully");
-      await signOut();
-    }
-    setLoading(false);
-    setDeleteDialogOpen(false);
   };
 
   const handleCancelEdit = () => {
@@ -156,20 +127,13 @@ export function ProfileManagement() {
           <User className="w-6 h-6" />
           <span>Profile Management</span>
         </h1>
-        <p className="mt-2 opacity-90 text-sm sm:text-base">
-          Manage your personal information and profile settings
-        </p>
       </div>
-      <Card>
+      <Card className="shadow-lg shadow-[#35408E]/15">
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <User className="w-5 h-5" />
             <span>Profile Information</span>
           </CardTitle>
-          <CardDescription>
-            Manage your personal information, profile picture, and account
-            settings
-          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Profile Picture Section */}
@@ -376,78 +340,6 @@ export function ProfileManagement() {
         </CardContent>
       </Card>
 
-      <Card className="border-destructive/20">
-        <CardHeader>
-          <CardTitle className="text-destructive flex items-center space-x-2">
-            <AlertTriangle className="w-5 h-5" />
-            <span>Danger Zone</span>
-          </CardTitle>
-          <CardDescription>
-            Permanently delete your account and all associated data
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Alert className="mb-4">
-            <AlertTriangle className="w-4 h-4" />
-            <AlertDescription>
-              Once you delete your account, there is no going back. All your
-              complaints, data, and account information will be permanently
-              removed.
-            </AlertDescription>
-          </Alert>
-
-          <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-            <DialogTrigger asChild>
-              <Button
-                variant="destructive"
-                className="flex items-center space-x-2"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span>Delete Account</span>
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle className="text-destructive">
-                  Delete Account
-                </DialogTitle>
-                <DialogDescription>
-                  Are you absolutely sure you want to delete your account? This
-                  action cannot be undone and will permanently remove:
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="space-y-2 text-sm">
-                <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-                  <li>Your profile and personal information</li>
-                  <li>All your submitted complaints and requests</li>
-                  <li>Your account history and activity</li>
-                  <li>Access to the TugonPH system</li>
-                </ul>
-              </div>
-
-              <DialogFooter className="flex-col sm:flex-row gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setDeleteDialogOpen(false)}
-                  disabled={loading}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="destructive"
-                  onClick={handleDeleteAccount}
-                  disabled={loading}
-                  className="flex items-center space-x-2"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  <span>{loading ? "Deleting..." : "Delete Account"}</span>
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </CardContent>
-      </Card>
     </div>
   );
 }

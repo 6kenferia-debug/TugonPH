@@ -674,7 +674,7 @@ export function AdminPanel({
       {/* Statistics Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         <Card
-          className={`cursor-pointer transition-all duration-300 hover:bg-primary/5 hover:border-primary/50 active:scale-95 ${
+          className={`cursor-pointer shadow-lg shadow-[#35408E]/15 transition-all duration-300 hover:bg-primary/5 hover:border-primary/50 active:scale-95 ${
             statusFilter === "all" ? "ring-2 ring-primary" : ""
           }`}
           onClick={() => setStatusFilter("all")}
@@ -690,7 +690,7 @@ export function AdminPanel({
         </Card>
 
         <Card
-          className={`cursor-pointer transition-all duration-300 hover:bg-yellow-500/5 hover:border-yellow-500/50 active:scale-95 ${
+          className={`cursor-pointer shadow-lg shadow-[#35408E]/15 transition-all duration-300 hover:bg-yellow-500/5 hover:border-yellow-500/50 active:scale-95 ${
             statusFilter === "pending"
               ? "ring-2 ring-yellow-500 bg-yellow-500/10"
               : ""
@@ -708,7 +708,7 @@ export function AdminPanel({
         </Card>
 
         <Card
-          className={`cursor-pointer transition-all duration-300 hover:bg-blue-500/5 hover:border-blue-500/50 active:scale-95 ${
+          className={`cursor-pointer shadow-lg shadow-[#35408E]/15 transition-all duration-300 hover:bg-blue-500/5 hover:border-blue-500/50 active:scale-95 ${
             statusFilter === "in-progress"
               ? "ring-2 ring-blue-500 bg-blue-500/10"
               : ""
@@ -726,7 +726,7 @@ export function AdminPanel({
         </Card>
 
         <Card
-          className={`cursor-pointer transition-all duration-300 hover:bg-green-500/5 hover:border-green-500/50 active:scale-95 ${
+          className={`cursor-pointer shadow-lg shadow-[#35408E]/15 transition-all duration-300 hover:bg-green-500/5 hover:border-green-500/50 active:scale-95 ${
             statusFilter === "resolved"
               ? "ring-2 ring-green-500 bg-green-500/10"
               : ""
@@ -744,7 +744,7 @@ export function AdminPanel({
         </Card>
 
         <Card
-          className={`cursor-pointer transition-all duration-300 hover:bg-red-500/5 hover:border-red-500/50 active:scale-95 ${
+          className={`cursor-pointer shadow-lg shadow-[#35408E]/15 transition-all duration-300 hover:bg-red-500/5 hover:border-red-500/50 active:scale-95 ${
             statusFilter === "rejected"
               ? "ring-2 ring-red-500 bg-red-500/10"
               : ""
@@ -763,7 +763,7 @@ export function AdminPanel({
       </div>
 
       {/* Heatmap access */}
-      <Card className="bg-card">
+      <Card className="bg-card shadow-lg shadow-[#35408E]/15">
         <CardContent className="py-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Map className="w-5 h-5 text-primary" />
@@ -791,7 +791,7 @@ export function AdminPanel({
       </Card>
 
       {/* Filters */}
-      <Card>
+      <Card className="shadow-lg shadow-[#35408E]/15">
         <CardHeader>
           <CardTitle className="text-lg sm:text-xl">Manage Requests</CardTitle>
         </CardHeader>
@@ -1362,7 +1362,7 @@ export function AdminPanel({
           {/* Mobile Card View */}
           <div className="lg:hidden space-y-4">
             {activeRequests.map((complaint) => (
-              <Card key={complaint.id}>
+              <Card key={complaint.id} className="shadow-lg shadow-[#35408E]/15">
                 <CardContent className="p-4">
                   <div className="space-y-3">
                     <div className="flex items-start justify-between">

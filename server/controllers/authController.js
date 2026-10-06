@@ -2,13 +2,16 @@ const crypto = require("node:crypto");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
-const { sendVerificationCode } = require("../services/email");
+const { sendVerificationCode, sendPasswordRecoveryCode } = require("../services/email");
+const { validatePassword } = require("../services/password-policy");
 
 const OTP_LENGTH = 6;
 const OTP_EXPIRATION_MINUTES = 10;
 const OTP_MAX_ATTEMPTS = 5;
 const OTP_RESEND_COOLDOWN_SECONDS = 60;
 const OTP_RESEND_LIMIT = 3;
+const PASSWORD_RECOVERY_MESSAGE = "If an account exists for this email, a verification code has been sent.";
+const PASSWORD_RECOVERY_TOKEN_MINUTES = 10;
 
 function normalizeEmail(value) {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
@@ -17,6 +20,10 @@ function normalizeEmail(value) {
 function generateOtp() {
   const range = 10 ** OTP_LENGTH;
   return crypto.randomInt(0, range).toString().padStart(OTP_LENGTH, "0");
+}
+
+function hashRecoveryToken(token) {
+  return crypto.createHash("sha256").update(token).digest("hex");
 }
 
 async function login(req, res, next) {
@@ -56,6 +63,68 @@ async function getCurrentUser(req, res) {
   return res.json({ user: req.user.toJSON() });
 }
 
+async function updateProfile(req, res, next) {
+  try {
+    const name = typeof req.body.name === "string" ? req.body.name.trim() : "";
+    const phoneNumber = typeof req.body.phoneNumber === "string" ? req.body.phoneNumber.trim() : "";
+
+    if (!name) {
+      return res.status(400).json({ error: "A valid name is required.", code: "INVALID_NAME" });
+    }
+    if (phoneNumber && !/^\d{11}$/.test(phoneNumber)) {
+      return res.status(400).json({ error: "Phone number must be exactly 11 digits.", code: "INVALID_PHONE_NUMBER" });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ error: "Authenticated account not found.", code: "ACCOUNT_NOT_FOUND" });
+    }
+
+    user.name = name;
+    user.phoneNumber = phoneNumber || null;
+    await user.save();
+    return res.json({ profile: user.toJSON() });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function updateNotificationSettings(req, res, next) {
+  try {
+    if (typeof req.body.emailNotifications !== "boolean") {
+      return res.status(400).json({
+        error: "Email notifications must be enabled or disabled.",
+        code: "INVALID_NOTIFICATION_SETTINGS",
+      });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ error: "Authenticated account not found.", code: "ACCOUNT_NOT_FOUND" });
+    }
+
+    user.emailNotifications = req.body.emailNotifications;
+    await user.save();
+    return res.json({ profile: user.toJSON() });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function deleteCurrentUserAccount(req, res, next) {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ error: "Authenticated account not found.", code: "ACCOUNT_NOT_FOUND" });
+    }
+
+    await user.deleteOne();
+    return res.json({ message: "Account deleted successfully." });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 async function register(req, res, next) {
   const email = normalizeEmail(req.body.email);
   const password = typeof req.body.password === "string" ? req.body.password : "";
@@ -65,8 +134,8 @@ async function register(req, res, next) {
   if (typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return res.status(400).json({ error: "A valid email address is required.", code: "INVALID_EMAIL" });
   }
-  if (password.length < 8) {
-    return res.status(400).json({ error: "Password must be at least 8 characters.", code: "INVALID_PASSWORD" });
+  if (!validatePassword(password)) {
+    return res.status(400).json({ error: "Password is too weak. Use at least 8 characters and meet the password strength requirements.", code: "INVALID_PASSWORD" });
   }
   if (!name || name.length > 160) {
     return res.status(400).json({ error: "A valid name is required.", code: "INVALID_NAME" });
@@ -263,4 +332,240 @@ async function resendVerification(req, res, next) {
   }
 }
 
-module.exports = { login, getCurrentUser, register, resendVerification, verifyEmail };
+async function requestPasswordRecovery(req, res, next) {
+  try {
+    const email = normalizeEmail(req.body.email);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: "A valid email address is required.", code: "INVALID_EMAIL" });
+    }
+
+    const genericResponse = () => res.status(202).json({
+      message: PASSWORD_RECOVERY_MESSAGE,
+      otpExpiresInMinutes: OTP_EXPIRATION_MINUTES,
+      otpResendCooldownSeconds: OTP_RESEND_COOLDOWN_SECONDS,
+    });
+    const user = await User.findOne({ email, emailVerified: true }).select(
+      "+passwordRecoveryOtpHash +passwordRecoveryOtpExpiresAt +passwordRecoveryOtpAttempts +passwordRecoveryOtpLastSentAt +passwordRecoveryOtpResendCount +passwordRecoveryTokenHash +passwordRecoveryTokenExpiresAt",
+    );
+    if (!user) return genericResponse();
+
+    const now = Date.now();
+    const lastSentAt = user.passwordRecoveryOtpLastSentAt
+      ? user.passwordRecoveryOtpLastSentAt.getTime()
+      : 0;
+    const withinRecoveryWindow = lastSentAt
+      && now - lastSentAt < OTP_EXPIRATION_MINUTES * 60 * 1000;
+    if (lastSentAt && now - lastSentAt < OTP_RESEND_COOLDOWN_SECONDS * 1000) {
+      return genericResponse();
+    }
+    if (withinRecoveryWindow && (user.passwordRecoveryOtpResendCount || 0) >= OTP_RESEND_LIMIT) {
+      return genericResponse();
+    }
+    if (!withinRecoveryWindow) {
+      user.passwordRecoveryOtpResendCount = 0;
+      user.passwordRecoveryOtpAttempts = 0;
+    }
+
+    const previousState = {
+      passwordRecoveryOtpHash: user.passwordRecoveryOtpHash,
+      passwordRecoveryOtpExpiresAt: user.passwordRecoveryOtpExpiresAt,
+      passwordRecoveryOtpAttempts: user.passwordRecoveryOtpAttempts,
+      passwordRecoveryOtpLastSentAt: user.passwordRecoveryOtpLastSentAt,
+      passwordRecoveryOtpResendCount: user.passwordRecoveryOtpResendCount,
+      passwordRecoveryTokenHash: user.passwordRecoveryTokenHash,
+      passwordRecoveryTokenExpiresAt: user.passwordRecoveryTokenExpiresAt,
+    };
+    const otp = generateOtp();
+    user.passwordRecoveryOtpHash = await bcrypt.hash(otp, 12);
+    user.passwordRecoveryOtpExpiresAt = new Date(now + OTP_EXPIRATION_MINUTES * 60 * 1000);
+    user.passwordRecoveryOtpAttempts = 0;
+    user.passwordRecoveryOtpLastSentAt = new Date(now);
+    user.passwordRecoveryOtpResendCount = (user.passwordRecoveryOtpResendCount || 0) + 1;
+    user.passwordRecoveryTokenHash = null;
+    user.passwordRecoveryTokenExpiresAt = null;
+
+    await user.save();
+    try {
+      await sendPasswordRecoveryCode(email, otp);
+    } catch (error) {
+      Object.assign(user, previousState);
+      await user.save();
+      if (error && (error.code === "EMAIL_SERVICE_NOT_CONFIGURED" || error.code === "EMAIL_DELIVERY_FAILED")) {
+        return res.status(503).json({ error: error.message, code: error.code });
+      }
+      throw error;
+    }
+
+    return genericResponse();
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function verifyPasswordRecoveryOtp(req, res, next) {
+  try {
+    const email = normalizeEmail(req.body.email);
+    const otp = typeof req.body.otp === "string" ? req.body.otp.trim() : "";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: "A valid email address is required.", code: "INVALID_EMAIL" });
+    }
+    if (!new RegExp(`^\\d{${OTP_LENGTH}}$`).test(otp)) {
+      return res.status(400).json({ error: `A valid ${OTP_LENGTH}-digit verification code is required.`, code: "INVALID_OTP" });
+    }
+
+    const user = await User.findOne({ email, emailVerified: true }).select(
+      "+passwordRecoveryOtpHash +passwordRecoveryOtpExpiresAt +passwordRecoveryOtpAttempts +passwordRecoveryTokenHash +passwordRecoveryTokenExpiresAt",
+    );
+    if (!user) {
+      return res.status(400).json({ error: "The verification code is invalid or expired.", code: "INVALID_OTP" });
+    }
+    if (user.passwordRecoveryTokenHash && user.passwordRecoveryTokenExpiresAt
+      && user.passwordRecoveryTokenExpiresAt.getTime() > Date.now()) {
+      return res.status(409).json({ error: "This verification code has already been used.", code: "OTP_ALREADY_USED" });
+    }
+    if (!user.passwordRecoveryOtpHash || !user.passwordRecoveryOtpExpiresAt) {
+      return res.status(400).json({ error: "The verification code is invalid or expired.", code: "INVALID_OTP" });
+    }
+    if (user.passwordRecoveryOtpExpiresAt.getTime() <= Date.now()) {
+      user.passwordRecoveryOtpHash = null;
+      user.passwordRecoveryOtpExpiresAt = null;
+      user.passwordRecoveryOtpAttempts = 0;
+      await user.save();
+      return res.status(410).json({ error: "The verification code has expired. Please request a new one.", code: "OTP_EXPIRED" });
+    }
+    if (user.passwordRecoveryOtpAttempts >= OTP_MAX_ATTEMPTS) {
+      user.passwordRecoveryOtpHash = null;
+      user.passwordRecoveryOtpExpiresAt = null;
+      await user.save();
+      return res.status(429).json({ error: "Too many verification attempts. Please request a new code.", code: "OTP_ATTEMPT_LIMIT_REACHED" });
+    }
+
+    const matches = await bcrypt.compare(otp, user.passwordRecoveryOtpHash);
+    if (!matches) {
+      user.passwordRecoveryOtpAttempts += 1;
+      if (user.passwordRecoveryOtpAttempts >= OTP_MAX_ATTEMPTS) {
+        user.passwordRecoveryOtpHash = null;
+        user.passwordRecoveryOtpExpiresAt = null;
+        await user.save();
+        return res.status(429).json({ error: "Too many incorrect verification attempts. Please request a new code.", code: "OTP_ATTEMPT_LIMIT_REACHED" });
+      }
+      await user.save();
+      return res.status(400).json({ error: "The verification code is incorrect.", code: "INVALID_OTP" });
+    }
+
+    const resetToken = crypto.randomBytes(32).toString("hex");
+    user.passwordRecoveryOtpHash = null;
+    user.passwordRecoveryOtpExpiresAt = null;
+    user.passwordRecoveryOtpAttempts = 0;
+    user.passwordRecoveryTokenHash = hashRecoveryToken(resetToken);
+    user.passwordRecoveryTokenExpiresAt = new Date(
+      Date.now() + PASSWORD_RECOVERY_TOKEN_MINUTES * 60 * 1000,
+    );
+    await user.save();
+
+    return res.json({
+      verified: true,
+      resetToken,
+      resetTokenExpiresInMinutes: PASSWORD_RECOVERY_TOKEN_MINUTES,
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function resetPassword(req, res, next) {
+  try {
+    const resetToken = typeof req.body.resetToken === "string" ? req.body.resetToken : "";
+    const password = typeof req.body.password === "string" ? req.body.password : "";
+    const confirmPassword = typeof req.body.confirmPassword === "string" ? req.body.confirmPassword : "";
+    if (!/^[a-f0-9]{64}$/.test(resetToken)) {
+      return res.status(400).json({ error: "The password reset session is invalid or expired.", code: "INVALID_RESET_TOKEN" });
+    }
+    if (!password || !confirmPassword) {
+      return res.status(400).json({ error: "New password and confirmation are required.", code: "MISSING_PASSWORD" });
+    }
+    if (password !== confirmPassword) {
+      return res.status(400).json({ error: "Passwords do not match.", code: "PASSWORD_MISMATCH" });
+    }
+    if (!validatePassword(password)) {
+      return res.status(400).json({ error: "Password is too weak. Use at least 8 characters and meet the password strength requirements.", code: "INVALID_PASSWORD" });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+    const updatedUser = await User.findOneAndUpdate(
+      {
+        passwordRecoveryTokenHash: hashRecoveryToken(resetToken),
+        passwordRecoveryTokenExpiresAt: { $gt: new Date() },
+      },
+      {
+        $set: { passwordHash },
+        $unset: {
+          passwordRecoveryOtpHash: 1,
+          passwordRecoveryOtpExpiresAt: 1,
+          passwordRecoveryOtpAttempts: 1,
+          passwordRecoveryOtpLastSentAt: 1,
+          passwordRecoveryOtpResendCount: 1,
+          passwordRecoveryTokenHash: 1,
+          passwordRecoveryTokenExpiresAt: 1,
+        },
+      },
+      { new: true },
+    );
+    if (!updatedUser) {
+      return res.status(410).json({ error: "The password reset session is invalid, expired, or already used.", code: "RESET_TOKEN_INVALID_OR_USED" });
+    }
+
+    return res.json({ message: "Password reset successfully." });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function changePassword(req, res, next) {
+  try {
+    const currentPassword = typeof req.body.currentPassword === "string" ? req.body.currentPassword : "";
+    const newPassword = typeof req.body.newPassword === "string" ? req.body.newPassword : "";
+    const confirmPassword = typeof req.body.confirmPassword === "string" ? req.body.confirmPassword : "";
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      return res.status(400).json({ error: "Current password, new password, and confirmation are required.", code: "MISSING_PASSWORD" });
+    }
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ error: "New password and confirmation do not match.", code: "PASSWORD_MISMATCH" });
+    }
+    if (!validatePassword(newPassword)) {
+      return res.status(400).json({ error: "Password is too weak. Use at least 8 characters and meet the password strength requirements.", code: "INVALID_PASSWORD" });
+    }
+
+    const user = await User.findById(req.user._id).select("+passwordHash");
+    if (!user) {
+      return res.status(401).json({ error: "Authenticated account not found.", code: "ACCOUNT_NOT_FOUND" });
+    }
+    if (!await bcrypt.compare(currentPassword, user.passwordHash)) {
+      return res.status(400).json({ error: "Current password is incorrect.", code: "CURRENT_PASSWORD_INCORRECT" });
+    }
+    if (await bcrypt.compare(newPassword, user.passwordHash)) {
+      return res.status(400).json({ error: "New password must be different from your current password.", code: "PASSWORD_UNCHANGED" });
+    }
+
+    user.passwordHash = await bcrypt.hash(newPassword, 12);
+    await user.save();
+    return res.json({ message: "Password changed successfully." });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+module.exports = {
+  login,
+  getCurrentUser,
+  updateProfile,
+  updateNotificationSettings,
+  deleteCurrentUserAccount,
+  register,
+  resendVerification,
+  verifyEmail,
+  requestPasswordRecovery,
+  verifyPasswordRecoveryOtp,
+  resetPassword,
+  changePassword,
+};

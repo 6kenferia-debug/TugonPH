@@ -21,6 +21,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useAuth } from "./auth-context";
+import { PasswordRecoveryForm } from "./password-recovery-form";
 import { toast } from "sonner";
 
 interface LoginFormProps {
@@ -36,6 +37,7 @@ export function LoginForm({ onSwitchToSignup }: LoginFormProps) {
   const [accountStatus, setAccountStatus] = useState<
     "pending" | "rejected" | "unverified" | null
   >(null);
+  const [showPasswordRecovery, setShowPasswordRecovery] = useState(false);
 
   const { signIn, loginAsGuest } = useAuth();
 
@@ -105,6 +107,10 @@ export function LoginForm({ onSwitchToSignup }: LoginFormProps) {
     }
     setLoading(false);
   };
+
+  if (showPasswordRecovery) {
+    return <PasswordRecoveryForm onBackToLogin={() => setShowPasswordRecovery(false)} />;
+  }
 
   return (
     <Card className="w-full max-w-md mx-auto shadow-lg shadow-[#35408E]/15">
@@ -222,6 +228,16 @@ export function LoginForm({ onSwitchToSignup }: LoginFormProps) {
                 ) : (
                   <Eye className="w-4 h-4" />
                 )}
+              </Button>
+            </div>
+            <div className="text-right">
+              <Button
+                type="button"
+                variant="link"
+                className="h-auto p-0 text-sm text-primary"
+                onClick={() => setShowPasswordRecovery(true)}
+              >
+                Forgot password?
               </Button>
             </div>
           </div>

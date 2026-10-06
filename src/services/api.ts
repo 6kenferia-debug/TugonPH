@@ -69,8 +69,13 @@ async function request<T>(
       headers,
       body: requestBody,
     });
-  } catch {
-    throw new ApiError("Unable to reach the TugonPH API.", 0, "NETWORK_ERROR");
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "unknown network error";
+    throw new ApiError(
+      `Unable to reach the TugonPH API. Start the backend with "npm run server" and confirm the API is listening on port 5000. (${detail})`,
+      0,
+      "NETWORK_ERROR",
+    );
   }
 
   const payload = response.status === 204
@@ -106,8 +111,13 @@ async function requestBlob(endpoint: string): Promise<Blob> {
       method: "GET",
       headers,
     });
-  } catch {
-    throw new ApiError("Unable to reach the TugonPH API.", 0, "NETWORK_ERROR");
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "unknown network error";
+    throw new ApiError(
+      `Unable to reach the TugonPH API. Start the backend with "npm run server" and confirm the API is listening on port 5000. (${detail})`,
+      0,
+      "NETWORK_ERROR",
+    );
   }
 
   if (!response.ok) {

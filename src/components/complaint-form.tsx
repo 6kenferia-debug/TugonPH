@@ -202,7 +202,9 @@ export function ComplaintForm({ onSubmit }: ComplaintFormProps) {  const [title
         <CardContent className="mt-6 px-4 sm:px-6 pb-8">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="title">{"Title of Complaint"}</Label>
+              <Label htmlFor="title">
+                {"Title of Complaint"} <span className="text-destructive">*</span>
+              </Label>
               <Input
                 id="title"
                 value={title}
@@ -213,7 +215,9 @@ export function ComplaintForm({ onSubmit }: ComplaintFormProps) {  const [title
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="category">{"Category"}</Label>
+              <Label htmlFor="category">
+                {"Category"} <span className="text-destructive">*</span>
+              </Label>
               <Select value={category} onValueChange={setCategory} required>
                 <SelectTrigger>
                   <SelectValue placeholder={"Select an option"} />
@@ -230,7 +234,9 @@ export function ComplaintForm({ onSubmit }: ComplaintFormProps) {  const [title
 
             {requiresRespondent && (
               <div className="space-y-2">
-                <Label htmlFor="respondent">{"Respondent"}</Label>
+                <Label htmlFor="respondent">
+                  {"Respondent"} <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   id="respondent"
                   value={respondent}
@@ -246,7 +252,9 @@ export function ComplaintForm({ onSubmit }: ComplaintFormProps) {  const [title
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="description">{"Description"}</Label>
+              <Label htmlFor="description">
+                {"Description"} <span className="text-destructive">*</span>
+              </Label>
               <Textarea
                 id="description"
                 value={description}
@@ -258,7 +266,9 @@ export function ComplaintForm({ onSubmit }: ComplaintFormProps) {  const [title
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="location">{"Address"}</Label>
+              <Label htmlFor="location">
+                {"Address"} <span className="text-destructive">*</span>
+              </Label>
               <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
                 <div className="flex-1 relative">
                   <Input
@@ -290,7 +300,9 @@ export function ComplaintForm({ onSubmit }: ComplaintFormProps) {  const [title
             </div>
 
             <div className="space-y-2">
-              <Label>{"Photo Evidence"}</Label>
+              <Label>
+                {"Photo Evidence"} <span className="text-destructive">*</span>
+              </Label>
               <div className="border-2 border-dashed border-border rounded-lg p-4 sm:p-6 text-center">
                 <input
                   ref={fileInputRef}
@@ -344,7 +356,9 @@ export function ComplaintForm({ onSubmit }: ComplaintFormProps) {  const [title
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="contact">{"Contact Number"}</Label>
+              <Label htmlFor="contact">
+                {"Contact Number"} <span className="text-destructive">*</span>
+              </Label>
               <Input
                 id="contact"
                 value={contactInfo}

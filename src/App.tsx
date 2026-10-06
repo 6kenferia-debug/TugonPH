@@ -570,17 +570,19 @@ function AppContent() {
   ]);
 
   const markAllNotificationsRead = () => {
-    setNotifications((prev) =>
-      persistNotifications(prev.map((item) => ({ ...item, read: true }))),
+    const next = persistNotifications(
+      notifications.map((item) => ({ ...item, read: true })),
     );
+    setNotifications(next);
   };
 
   const markNotificationRead = (id: string) => {
-    setNotifications((prev) =>
-      persistNotifications(
-        prev.map((item) => (item.id === id ? { ...item, read: true } : item)),
+    const next = persistNotifications(
+      notifications.map((item) =>
+        item.id === id ? { ...item, read: true } : item,
       ),
     );
+    setNotifications(next);
   };
 
   useEffect(() => {
@@ -788,7 +790,9 @@ function AppContent() {
     }
   };
 
-  const pendingCount = complaints.filter((c) => c.status === "pending").length;
+  const pendingCount =
+    complaints.filter((complaint) => complaint.status === "pending").length +
+    assistanceRequests.filter((request) => request.status === "pending").length;
 
   // Show loading spinner while checking authentication
   if (loading) {
@@ -1032,7 +1036,7 @@ function AppContent() {
               </div>
             </div>
 
-            <Card>
+            <Card className="shadow-lg shadow-[#35408E]/15">
               <CardContent className="p-4 sm:p-6 space-y-3">
                 {notifications.length === 0 &&
                 (complaintsLoading || assistanceLoading) ? (

@@ -282,9 +282,9 @@ export function UnifiedDashboard({
       {/* Statistics Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <Card
-          className={`cursor-pointer transition-all duration-300 hover:bg-primary/5 hover:border-primary/50 active:scale-95 ${
+          className={`cursor-pointer shadow-lg shadow-[#35408E]/15 transition-all duration-300 hover:bg-primary/5 hover:border-primary/50 active:scale-95 ${
             isSummaryStatusActive("all")
-              ? "ring-2 ring-primary bg-primary/10"
+              ? "ring-2 ring-primary"
               : ""
           }`}
           onClick={() => applySummaryStatusFilter("all")}
@@ -303,7 +303,7 @@ export function UnifiedDashboard({
         </Card>
 
         <Card
-          className={`cursor-pointer transition-all duration-300 hover:bg-yellow-500/5 hover:border-yellow-500/50 active:scale-95 ${
+          className={`cursor-pointer shadow-lg shadow-[#35408E]/15 transition-all duration-300 hover:bg-yellow-500/5 hover:border-yellow-500/50 active:scale-95 ${
             isSummaryStatusActive("pending")
               ? "ring-2 ring-yellow-500 bg-yellow-500/10"
               : ""
@@ -324,7 +324,7 @@ export function UnifiedDashboard({
         </Card>
 
         <Card
-          className={`cursor-pointer transition-all duration-300 hover:bg-blue-500/5 hover:border-blue-500/50 active:scale-95 ${
+          className={`cursor-pointer shadow-lg shadow-[#35408E]/15 transition-all duration-300 hover:bg-blue-500/5 hover:border-blue-500/50 active:scale-95 ${
             isSummaryStatusActive("in-progress")
               ? "ring-2 ring-blue-500 bg-blue-500/10"
               : ""
@@ -345,7 +345,7 @@ export function UnifiedDashboard({
         </Card>
 
         <Card
-          className={`cursor-pointer transition-all duration-300 hover:bg-green-500/5 hover:border-green-500/50 active:scale-95 ${
+          className={`cursor-pointer shadow-lg shadow-[#35408E]/15 transition-all duration-300 hover:bg-green-500/5 hover:border-green-500/50 active:scale-95 ${
             isSummaryStatusActive("resolved")
               ? "ring-2 ring-green-500 bg-green-500/10"
               : ""
@@ -365,7 +365,7 @@ export function UnifiedDashboard({
           </CardContent>
         </Card>
 
-        <Card className="col-span-2 sm:col-span-3 lg:col-span-1">
+        <Card className="col-span-2 shadow-lg shadow-[#35408E]/15 sm:col-span-3 lg:col-span-1">
           <CardHeader className="pb-2 sm:pb-3">
             <CardTitle className="text-xs sm:text-sm text-muted-foreground">
               {"Success Rate"}
@@ -386,7 +386,7 @@ export function UnifiedDashboard({
       </div>
 
       {/* Filters and Search */}
-      <Card>
+      <Card className="shadow-lg shadow-[#35408E]/15">
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <MessageSquare className="w-5 h-5" />
@@ -394,11 +394,6 @@ export function UnifiedDashboard({
               {isAdmin ? "Complaints" : "Complaints"}
             </span>
           </CardTitle>
-          <CardDescription>
-            {isAdmin
-              ? "Monitor and manage all community requests"
-              : "View all community requests and their current status"}
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
@@ -471,7 +466,7 @@ export function UnifiedDashboard({
                   </h3>
                   <p className="text-muted-foreground mb-4">
                     {baseComplaints.length === 0
-                      ? "The community hasn't submitted any requests yet"
+                      ? "You havn't submitted any requests yet"
                       : "Try adjusting your search or filter criteria"}
                   </p>
                 </div>
@@ -479,7 +474,7 @@ export function UnifiedDashboard({
                 filteredComplaints.map((complaint) => (
                   <Card
                     key={complaint.id}
-                    className="hover:shadow-md transition-shadow"
+                    className="shadow-lg shadow-[#35408E]/15 hover:shadow-md transition-shadow"
                   >
                     <CardContent className="p-4 sm:p-6">
                       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
@@ -571,15 +566,12 @@ export function UnifiedDashboard({
       </Card>
 
       {/* Assistance Requests */}
-      <Card>
+      <Card className="shadow-lg shadow-[#35408E]/15">
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <Heart className="w-5 h-5" />
             <span>{"Assistance Requests"}</span>
           </CardTitle>
-          <CardDescription>
-            {"View all assistance requests and their current status"}
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
@@ -649,12 +641,12 @@ export function UnifiedDashboard({
                   </h3>
                   <p className="text-muted-foreground mb-4">
                     {assistanceRequests.length === 0
-                      ? "The community hasn't submitted any assistance requests yet"
+                      ? "You haven't submitted any assistance requests yet"
                       : "Try adjusting your search or filter criteria"}
                   </p>
                   <p className="hidden">
                     {assistanceRequests.length === 0
-                      ? "The community hasn’t submitted any assistance requests yet"
+                      ? "You haven't submitted any assistance requests yet"
                       : "Try adjusting your search or filter criteria"}
                   </p>
                 </div>
@@ -662,7 +654,7 @@ export function UnifiedDashboard({
                 filteredAssistanceRequests.map((request) => (
                   <Card
                     key={request.id}
-                    className="hover:shadow-md transition-shadow"
+                    className="shadow-lg shadow-[#35408E]/15 hover:shadow-md transition-shadow"
                   >
                     <CardContent className="p-4 sm:p-6">
                       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">

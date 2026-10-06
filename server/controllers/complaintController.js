@@ -247,9 +247,11 @@ async function update(req, res) {
   const statusChanged = updates.status !== undefined && String(updates.status) !== String(previousStatus);
   if (statusChanged && complaint.userId) {
     try {
-      const user = await User.findById(complaint.userId).select("email");
+      const user = await User.findById(complaint.userId).select("email emailNotifications");
       if (!user?.email) {
         console.warn(`Skipping complaint status email for ${complaint.id}: no registered user email found.`);
+      } else if (user.emailNotifications === false) {
+        console.info(`Skipping complaint status email for ${complaint.id}: email notifications are disabled.`);
       } else {
         await sendStatusUpdateEmail({
           email: user.email,

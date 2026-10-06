@@ -137,6 +137,58 @@ async function sendVerificationCode(email, code) {
   }
 }
 
+async function sendPasswordRecoveryCode(email, code) {
+  if (typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    const error = new Error("A valid email address is required to send the recovery code.");
+    error.status = 400;
+    error.code = "INVALID_EMAIL";
+    throw error;
+  }
+
+  if (typeof code !== "string" || !/^\d{6}$/.test(code)) {
+    const error = new Error("A valid 6-digit recovery code is required.");
+    error.status = 400;
+    error.code = "INVALID_OTP";
+    throw error;
+  }
+
+  try {
+    const info = await sendEmailMessage({
+      to: email,
+      subject: "Your TugonPH password recovery code",
+      text: `Your TugonPH password recovery code is ${code}. It expires in 10 minutes. Do not share this code with anyone.`,
+      html: `
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #111827; max-width: 560px; margin: 0 auto;">
+          <h2 style="margin-bottom: 12px; color: #0f172a;">TugonPH Password Recovery</h2>
+          <p>Hello,</p>
+          <p>Use the following code to reset your TugonPH password:</p>
+          <div style="padding: 18px 20px; margin: 18px 0; border-radius: 10px; background: #eff6ff; border: 1px solid #bfdbfe; text-align: center; font-size: 30px; font-weight: 700; letter-spacing: 6px; color: #1d4ed8;">
+            ${code}
+          </div>
+          <p>This code expires in 10 minutes.</p>
+          <p>Do not share this code with anyone. If you did not request a password reset, you can ignore this email.</p>
+        </div>
+      `,
+      deliveryLabel: "password recovery email",
+    });
+
+    if (!info) {
+      const deliveryError = new Error("We could not send the password recovery email right now. Please try again in a few minutes.");
+      deliveryError.status = 503;
+      deliveryError.code = "EMAIL_DELIVERY_FAILED";
+      throw deliveryError;
+    }
+
+    return info;
+  } catch (error) {
+    if (error && error.code === "EMAIL_SERVICE_NOT_CONFIGURED") throw error;
+    const deliveryError = new Error("We could not send the password recovery email right now. Please try again in a few minutes.");
+    deliveryError.status = 503;
+    deliveryError.code = "EMAIL_DELIVERY_FAILED";
+    throw deliveryError;
+  }
+}
+
 async function sendStatusUpdateEmail({
   email,
   kind,
@@ -204,6 +256,7 @@ async function sendStatusUpdateEmail({
 
 module.exports = {
   sendVerificationCode,
+  sendPasswordRecoveryCode,
   sendStatusUpdateEmail,
   EmailServiceNotConfiguredError,
 };

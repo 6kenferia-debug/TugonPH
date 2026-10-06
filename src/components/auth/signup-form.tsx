@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "./auth-context";
 import { toast } from "sonner";
+import { evaluatePasswordStrength as getPasswordStrength } from "./password-strength";
 
 interface SignupFormProps {
   onSwitchToLogin: () => void;
@@ -142,51 +143,7 @@ export function SignupForm({ onSwitchToLogin }: SignupFormProps) {
   };
 
   const evaluatePasswordStrength = (password: string) => {
-    if (!password) {
-      setPasswordStrength({ score: 0, label: "", color: "", feedback: [] });
-      return;
-    }
-
-    let score = 0;
-    const feedback: string[] = [];
-    const criteria = {
-      length: password.length >= 8,
-      uppercase: /[A-Z]/.test(password),
-      lowercase: /[a-z]/.test(password),
-      number: /[0-9]/.test(password),
-      special: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password),
-    };
-
-    if (criteria.length) score += 20;
-    else feedback.push("At least 8 characters");
-    if (criteria.uppercase) score += 20;
-    else feedback.push("At least one uppercase letter");
-    if (criteria.lowercase) score += 20;
-    else feedback.push("At least one lowercase letter");
-    if (criteria.number) score += 20;
-    else feedback.push("At least one number");
-    if (criteria.special) score += 20;
-    else feedback.push("At least one special character (!@#$%^&*)");
-    if (password.length >= 12) score += 10;
-    if (password.length >= 16) score += 10;
-
-    let label = "";
-    let color = "";
-    if (score < 40) {
-      label = "Weak";
-      color = "text-red-600 ";
-    } else if (score < 70) {
-      label = "Medium";
-      color = "text-yellow-600 ";
-    } else if (score < 100) {
-      label = "Strong";
-      color = "text-green-600 ";
-    } else {
-      label = "Very Strong";
-      color = "text-emerald-600 ";
-    }
-
-    setPasswordStrength({ score, label, color, feedback });
+    setPasswordStrength(getPasswordStrength(password));
   };
 
   const handlePasswordChange = (value: string) => {
@@ -559,7 +516,9 @@ export function SignupForm({ onSwitchToLogin }: SignupFormProps) {
         <form onSubmit={handleSignup} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="firstName">First Name</Label>
+              <Label htmlFor="firstName">
+                First Name <span className="text-destructive">*</span>
+              </Label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                 <Input
@@ -585,7 +544,9 @@ export function SignupForm({ onSwitchToLogin }: SignupFormProps) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="lastName">Last Name</Label>
+              <Label htmlFor="lastName">
+                Last Name <span className="text-destructive">*</span>
+              </Label>
               <Input
                 id="lastName"
                 type="text"
@@ -631,7 +592,9 @@ export function SignupForm({ onSwitchToLogin }: SignupFormProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email">
+              Email <span className="text-destructive">*</span>
+            </Label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
               <Input
@@ -681,7 +644,9 @@ export function SignupForm({ onSwitchToLogin }: SignupFormProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">
+              Password <span className="text-destructive">*</span>
+            </Label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
               <Input
@@ -766,7 +731,9 @@ export function SignupForm({ onSwitchToLogin }: SignupFormProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirm Password</Label>
+            <Label htmlFor="confirmPassword">
+              Confirm Password <span className="text-destructive">*</span>
+            </Label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
               <Input
