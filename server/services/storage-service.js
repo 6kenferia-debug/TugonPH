@@ -1,6 +1,7 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs/promises");
 const path = require("node:path");
+const { del, put } = require("@vercel/blob");
 
 const UPLOAD_ROOT = path.resolve(__dirname, "..", "uploads");
 const PUBLIC_ROOT = path.join(UPLOAD_ROOT, "public");
@@ -58,12 +59,30 @@ async function saveFile({ kind, ownerId, buffer, mimeType }) {
   const { root, directory } = getUploadLocation(kind, ownerId);
   const filename = `${crypto.randomUUID()}${extension}`;
   const relativePath = path.join(directory, filename).split(path.sep).join("/");
+
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    const blob = await put(relativePath, buffer, {
+      access: "public",
+      addRandomSuffix: false,
+      contentType: mimeType,
+    });
+    return { filename, relativePath, url: blob.url };
+  }
+
   const absolutePath = safeResolve(root, relativePath);
 
   await fs.mkdir(path.dirname(absolutePath), { recursive: true });
   await fs.writeFile(absolutePath, buffer, { flag: "wx", mode: 0o600 });
 
   return { filename, relativePath, absolutePath };
+}
+
+async function removeStoredFile(stored) {
+  if (stored.url) {
+    await del(stored.url);
+    return;
+  }
+  await fs.rm(stored.absolutePath, { force: true });
 }
 
 function getPublicFilePath(relativePath) {
@@ -83,9 +102,24 @@ async function removePublicFileUrl(fileUrl) {
   } catch {
     return false;
   }
-  const configuredBase = new URL(
-    process.env.PUBLIC_API_URL || `http://localhost:${process.env.PORT || 5000}/api`,
-  );
+
+  if (
+    parsed.protocol === "https:" &&
+    (
+      parsed.hostname === "public.blob.vercel-storage.com" ||
+      parsed.hostname.endsWith(".public.blob.vercel-storage.com")
+    ) &&
+    process.env.BLOB_READ_WRITE_TOKEN
+  ) {
+    await del(parsed.toString());
+    return true;
+  }
+
+  const publicApiUrl = process.env.PUBLIC_API_URL ||
+    (process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}/api`
+      : `http://localhost:${process.env.PORT || 5000}/api`);
+  const configuredBase = new URL(publicApiUrl);
   if (parsed.origin !== configuredBase.origin) return false;
   const prefix = "/api/uploads/";
   if (!parsed.pathname.startsWith(prefix)) return false;
@@ -101,9 +135,13 @@ async function removePublicFileUrl(fileUrl) {
   return true;
 }
 
-function publicFileUrl(relativePath) {
-  const base = (process.env.PUBLIC_API_URL || `http://localhost:${process.env.PORT || 5000}/api`).replace(/\/+$/, "");
-  const encodedPath = relativePath.split("/").map(encodeURIComponent).join("/");
+function publicFileUrl(stored) {
+  if (stored.url) return stored.url;
+  const base = (process.env.PUBLIC_API_URL ||
+    (process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}/api`
+      : `http://localhost:${process.env.PORT || 5000}/api`)).replace(/\/+$/, "");
+  const encodedPath = stored.relativePath.split("/").map(encodeURIComponent).join("/");
   return `${base}/uploads/${encodedPath}`;
 }
 
@@ -114,6 +152,7 @@ module.exports = {
   getPublicFilePath,
   publicFileUrl,
   removePublicFileUrl,
+  removeStoredFile,
   safeResolve,
   saveFile,
 };

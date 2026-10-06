@@ -34,14 +34,39 @@ const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || defaultOrigins.join(
   .map((origin) => origin.trim())
   .filter(Boolean);
 
-app.use(cors({
-  origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(new Error("Origin is not allowed by CORS."));
-  },
-  allowedHeaders: ["Authorization", "Content-Type"],
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-}));
+app.use((req, res, next) => {
+  const requestOrigin = `${req.get("x-forwarded-proto") || req.protocol}://${req.get("host")}`;
+  const deploymentOrigins = [
+    process.env.VERCEL_URL && `https://${process.env.VERCEL_URL}`,
+    process.env.VERCEL_PROJECT_PRODUCTION_URL
+      && `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`,
+  ].filter(Boolean);
+
+  return cors({
+    origin(origin, callback) {
+      if (
+        !origin ||
+        allowedOrigins.includes(origin) ||
+        deploymentOrigins.includes(origin) ||
+        origin === requestOrigin
+      ) {
+        return callback(null, true);
+      }
+      return callback(new Error("Origin is not allowed by CORS."));
+    },
+    allowedHeaders: ["Authorization", "Content-Type"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  })(req, res, next);
+});
+
+app.use(async (req, res, next) => {
+  try {
+    await connectToDatabase();
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
 app.use(express.json({ limit: "15mb" }));
 
 app.get("/api/health", (req, res) => {
@@ -93,10 +118,12 @@ async function startServer() {
   process.on("SIGTERM", () => void shutdown("SIGTERM"));
 }
 
-startServer().catch(async (error) => {
-  console.error(`Backend startup failed: ${error.message}`);
-  await mongoose.disconnect().catch(() => {});
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  startServer().catch(async (error) => {
+    console.error(`Backend startup failed: ${error.message}`);
+    await mongoose.disconnect().catch(() => {});
+    process.exitCode = 1;
+  });
+}
 
 module.exports = app;

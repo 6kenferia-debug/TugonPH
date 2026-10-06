@@ -1,6 +1,6 @@
 # TugonPH
 
-A barangay service management system built with React, TypeScript, Vite, Express, MongoDB, JWT authentication, and local filesystem storage. TugonPH helps residents and guests submit complaints or assistance requests, while administrators manage submissions, verify accounts, review analytics, and monitor request locations.
+A barangay service management system built with React, TypeScript, Vite, Express, MongoDB, and JWT authentication. TugonPH helps residents and guests submit complaints or assistance requests, while administrators manage submissions, verify accounts, review analytics, and monitor request locations. Uploaded images use local filesystem storage in development and Vercel Blob when deployed there.
 
 ![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)
 ![React](https://img.shields.io/badge/React-18.3.1-61dafb.svg)
@@ -59,13 +59,32 @@ A barangay service management system built with React, TypeScript, Vite, Express
 
 - **Express and Mongoose** - REST API and MongoDB Atlas database (`TugonPH`)
 - **Polling** - Authenticated request-change detection over the REST API
-- **Local Filesystem Storage** - Profile pictures and resolution proofs are stored locally on the server
+- **Image Storage** - Profile pictures and resolution proofs use local filesystem storage in development and Vercel Blob on Vercel
 
 ## Prerequisites
 
-- **Node.js** v16 or higher
+- **Node.js** v20 or higher
 - **npm**, **yarn**, or **pnpm**
 - A MongoDB Atlas cluster, database user, and network access entry for your current IP
+
+## Deploying to Vercel
+
+The Vite frontend and Express API are deployed together as one Vercel project. The API runs as a serverless function under `/api`; uploaded profile pictures and resolution proofs are stored in Vercel Blob instead of the function's temporary filesystem.
+
+1. Import the repository into Vercel. If the repository contains this project in a `client` subfolder, set **Root Directory** to `client`.
+2. Use Node.js 20 or later. Vercel should detect Vite automatically; the build command is `npm run build` and the output directory is `dist`.
+3. Create a Blob store from the Vercel project's **Storage** tab and connect it to the project. This makes `BLOB_READ_WRITE_TOKEN` available to the API.
+4. Add these server-side environment variables in Vercel for Production and any Preview environments that you use:
+   - `MONGODB_URI` — the MongoDB Atlas URI for the `TugonPH` database.
+   - `JWT_SECRET` — a long, random signing secret; do not reuse the example value.
+   - `BLOB_READ_WRITE_TOKEN` — normally added when you connect the Blob store.
+   - `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_SECURE`, `EMAIL_USER`, `EMAIL_PASSWORD`, and optionally `EMAIL_FROM` if email verification and password recovery should send email.
+5. In MongoDB Atlas, allow connections from Vercel's serverless functions. Vercel does not provide fixed outbound IPs on every plan; if you use Atlas IP access lists, you may need `0.0.0.0/0`. Restrict access with a dedicated database user and a strong password.
+6. Deploy, then verify the API at `https://<your-domain>/api/health`. A healthy response reports `"status":"ok"` and `"mongo":"connected"`.
+
+The frontend uses the same-origin `/api` URL by default; do not set `VITE_API_URL` to a localhost URL in Vercel. If the frontend and API are deployed on different domains, set `VITE_API_URL` to the API's `/api` URL and configure `CORS_ALLOWED_ORIGINS` on the API with the exact frontend origin.
+
+Vercel Functions impose a request-body limit (currently about 4.5 MB). This is lower than the API's local 5 MB profile-picture and 10 MB resolution-proof limits, so uploads near those local limits may be rejected by Vercel before reaching the API. Keep deployed uploads below the platform limit.
 
 ## Installation
 

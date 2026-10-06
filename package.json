@@ -31,6 +31,7 @@
     "@radix-ui/react-tooltip": "^1.1.8",
     "@types/leaflet": "^1.9.21",
     "@types/leaflet.heat": "^0.2.5",
+    "@vercel/blob": "^2.8.1",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "*",

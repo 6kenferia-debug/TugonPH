@@ -1,10 +1,10 @@
-const fs = require("node:fs");
 const Complaint = require("../models/Complaint");
 const AssistanceRequest = require("../models/AssistanceRequest");
 const {
   getPublicFilePath,
   publicFileUrl,
   removePublicFileUrl,
+  removeStoredFile,
   saveFile,
 } = require("../services/storage-service");
 const { createRequestHistoryEntry } = require("../services/requestHistory");
@@ -20,14 +20,14 @@ async function saveProfilePicture(req, res) {
     buffer: req.file.buffer,
     mimeType: req.file.detectedMimeType,
   });
-  const nextUrl = publicFileUrl(stored.relativePath);
+  const nextUrl = publicFileUrl(stored);
   const previousUrl = user.profilePictureUrl;
 
   try {
     user.profilePictureUrl = nextUrl;
     await user.save();
   } catch (error) {
-    await fs.promises.rm(stored.absolutePath, { force: true });
+    await removeStoredFile(stored);
     throw error;
   }
 
@@ -61,7 +61,7 @@ async function saveResolutionProof(req, res, Model, recordType) {
     buffer: req.file.buffer,
     mimeType: req.file.detectedMimeType,
   });
-  const nextUrl = publicFileUrl(stored.relativePath);
+  const nextUrl = publicFileUrl(stored);
   const previousUrl = record.resolutionProofImage;
 
   try {
@@ -70,7 +70,7 @@ async function saveResolutionProof(req, res, Model, recordType) {
     record.resolutionProofUploadedBy = req.user.id;
     await record.save();
   } catch (error) {
-    await fs.promises.rm(stored.absolutePath, { force: true });
+    await removeStoredFile(stored);
     throw error;
   }
 
