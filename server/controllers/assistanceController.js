@@ -251,7 +251,6 @@ async function update(req, res) {
     }
   }
 
-  emitRequestChanged("assistance:updated", assistanceRequest);
   return res.json({ assistanceRequest });
 }
 

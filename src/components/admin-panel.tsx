@@ -484,7 +484,7 @@ export function AdminPanel({
       Boolean(selectedComplaint) && proofUploadingId === selectedComplaint?.id;
 
     return (
-      <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
+      <div className="space-y-3 rounded-lg border border-border bg-card p-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <label className="font-medium">Admin Notes:</label>
           <div className="flex flex-wrap gap-2">
@@ -591,7 +591,7 @@ export function AdminPanel({
       />
 
       <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
-        <DialogContent className="flex max-h-[90vh] min-w-0 flex-col overflow-hidden">
+        <DialogContent className="flex w-full max-w-2xl max-h-[90vh] min-w-0 flex-col overflow-hidden bg-card">
           <DialogHeader className="min-w-0 shrink-0">
             <DialogTitle>Request History</DialogTitle>
             <DialogDescription className="break-words [overflow-wrap:anywhere]">
@@ -611,7 +611,7 @@ export function AdminPanel({
             ) : (
               <div className="space-y-4">
                 {requestHistory.map((entry) => (
-                  <div key={entry.id} className="w-full min-w-0 rounded-lg border border-border bg-muted/30 p-4">
+                  <div key={entry.id} className="w-full min-w-0 rounded-lg border border-border bg-card p-4">
                     <div className="flex min-w-0 items-start gap-3">
                       <div className="min-w-0 flex-1">
                         <p className="break-words font-medium text-foreground [overflow-wrap:anywhere]">{entry.action}</p>
@@ -675,7 +675,7 @@ export function AdminPanel({
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         <Card
           className={`cursor-pointer transition-all duration-300 hover:bg-primary/5 hover:border-primary/50 active:scale-95 ${
-            statusFilter === "all" ? "ring-2 ring-primary bg-primary/10" : ""
+            statusFilter === "all" ? "ring-2 ring-primary" : ""
           }`}
           onClick={() => setStatusFilter("all")}
         >
@@ -763,7 +763,7 @@ export function AdminPanel({
       </div>
 
       {/* Heatmap access */}
-      <Card>
+      <Card className="bg-card">
         <CardContent className="py-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Map className="w-5 h-5 text-primary" />
@@ -1074,7 +1074,7 @@ export function AdminPanel({
                                 Manage
                               </Button>
                             </DialogTrigger>
-                            <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+                            <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col bg-card">
                               <DialogHeader className="flex-shrink-0">
                                 <DialogTitle>Manage Request</DialogTitle>
                                 <DialogDescription>
@@ -1441,7 +1441,7 @@ export function AdminPanel({
                             Manage Request
                           </Button>
                         </DialogTrigger>
-                        <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+                        <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col bg-card">
                           <DialogHeader className="flex-shrink-0">
                             <DialogTitle>Manage Request</DialogTitle>
                             <DialogDescription>
@@ -1737,7 +1737,8 @@ export function AdminPanel({
               No, Keep It
             </AlertDialogCancel>
             <AlertDialogAction
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            className="bg-destructive hover:bg-destructive/90"
+            style={{ color: "#ffffff" }}
               onClick={handleConfirmDelete}>
               Yes, Delete
             </AlertDialogAction>

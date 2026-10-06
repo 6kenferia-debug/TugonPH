@@ -1,6 +1,6 @@
 # TugonPH
 
-A barangay service management system built with React, TypeScript, Vite, Express, MongoDB, JWT authentication, Socket.IO, and local filesystem storage. TugonPH helps residents and guests submit complaints or assistance requests, while administrators manage submissions, verify accounts, review analytics, and monitor request locations in real time.
+A barangay service management system built with React, TypeScript, Vite, Express, MongoDB, JWT authentication, and local filesystem storage. TugonPH helps residents and guests submit complaints or assistance requests, while administrators manage submissions, verify accounts, review analytics, and monitor request locations in real time.
 
 ![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)
 ![React](https://img.shields.io/badge/React-18.3.1-61dafb.svg)
@@ -37,7 +37,7 @@ A barangay service management system built with React, TypeScript, Vite, Express
 - **Role-Based Access Control** - Separate resident, guest, and admin capabilities.
 - **Pending Approval Enforcement** - New verified registrations remain pending until admin approval.
 - **Strict Contact Validation** - Contact numbers are normalized and validated as 11-digit numeric values.
-- **Real-Time Sync** - Authenticated residents receive changes for their own complaints and assistance requests; admins receive all request changes through Socket.IO. REST and MongoDB remain the source of truth.
+- **Real-Time Sync** - Authenticated residents receive changes for their own complaints and assistance requests; admins receive all request changes through authenticated polling. REST and MongoDB remain the source of truth.
 - **Responsive Interface** - Optimized for desktop and mobile layouts.
 
 ## Tech Stack
@@ -58,7 +58,7 @@ A barangay service management system built with React, TypeScript, Vite, Express
 ### Backend and Database
 
 - **Express and Mongoose** - REST API and MongoDB Atlas database (`TugonPH`)
-- **Socket.IO** - Authenticated realtime request-change events on the Express HTTP server
+- **Polling** - Authenticated request-change detection over the REST API
 - **Local Filesystem Storage** - Profile pictures and resolution proofs are stored locally on the server
 
 ## Prerequisites
@@ -104,7 +104,7 @@ If Node.js reports `querySrv ECONNREFUSED` while resolving the Atlas hostname, s
 
 ### Realtime
 
-Socket.IO runs on the Express API port (`5000`). Authenticated clients connect with their existing JWT. Residents join only their own user room; admins join the admin room. Request changes are emitted only after the corresponding MongoDB write completes.
+The frontend checks for request changes every seven seconds using its existing JWT. Residents receive only their own request changes, while admins receive changes for all requests. The API returns request identifiers and timestamps only; the REST API remains the source of request data.
 
 ## Running the Application
 
@@ -122,10 +122,10 @@ Then start the Vite frontend in another terminal:
 npm run dev
 ```
 
-Open `http://localhost:5173`. The frontend sends API and Socket.IO requests
-through the Vite development proxy to `http://127.0.0.1:5000`, so the browser
-uses the same `localhost:5173` origin for authentication. The API stores its
-database data in Atlas.
+Open `http://localhost:5173`. The frontend sends API requests through the Vite
+development proxy to `http://127.0.0.1:5000`, so the browser uses the same
+`localhost:5173` origin for authentication. The API stores its database data
+in Atlas.
 
 ### Production Build
 
@@ -218,9 +218,9 @@ TugonPH/
 
 ### Requests do not update in real time
 
-- Confirm the backend Socket.IO server is running on the same Express API port.
+- Confirm the backend API is running and MongoDB is connected.
 - Restart the client after a token expiry or logout/login cycle.
-- Check the browser console for auth or socket errors.
+- Check the browser console for polling or authentication errors.
 
 ### Permission denied errors
 

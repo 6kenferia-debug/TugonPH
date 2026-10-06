@@ -5,28 +5,17 @@ const { authenticate } = require("../middleware/authenticate");
 
 const router = express.Router();
 
-// Simple polling endpoint - returns items changed since timestamp
 router.get("/complaints", authenticate, async (req, res, next) => {
   try {
-    const since = parseInt(req.query.since) || 0;
-    const sinceDate = new Date(since);
-
-    const user = req.user;
-    const query = { userId: user.id };
-
-    // Get created/updated complaints since the timestamp
-    const complaints = await Complaint.find({
-      ...query,
-      updatedAt: { $gte: sinceDate },
-    })
-      .sort({ updatedAt: -1 })
-      .limit(50);
-
-    return res.json({
-      created: complaints.filter((c) => c.createdAt >= sinceDate),
-      updated: complaints.filter((c) => c.createdAt < sinceDate),
-      deleted: [],
-    });
+    const query = req.user.role === "admin" ? {} : { userId: req.user.id };
+    const complaints = await Complaint.find(query)
+      .select("_id userId updatedAt")
+      .lean();
+    return res.json(complaints.map((complaint) => ({
+      id: String(complaint._id),
+      userId: complaint.userId == null ? null : String(complaint.userId),
+      updatedAt: complaint.updatedAt.toISOString(),
+    })));
   } catch (error) {
     next(error);
   }
@@ -34,25 +23,15 @@ router.get("/complaints", authenticate, async (req, res, next) => {
 
 router.get("/assistance-requests", authenticate, async (req, res, next) => {
   try {
-    const since = parseInt(req.query.since) || 0;
-    const sinceDate = new Date(since);
-
-    const user = req.user;
-    const query = { userId: user.id };
-
-    // Get created/updated assistance requests since the timestamp
-    const requests = await AssistanceRequest.find({
-      ...query,
-      updatedAt: { $gte: sinceDate },
-    })
-      .sort({ updatedAt: -1 })
-      .limit(50);
-
-    return res.json({
-      created: requests.filter((r) => r.createdAt >= sinceDate),
-      updated: requests.filter((r) => r.createdAt < sinceDate),
-      deleted: [],
-    });
+    const query = req.user.role === "admin" ? {} : { userId: req.user.id };
+    const requests = await AssistanceRequest.find(query)
+      .select("_id userId updatedAt")
+      .lean();
+    return res.json(requests.map((request) => ({
+      id: String(request._id),
+      userId: request.userId == null ? null : String(request.userId),
+      updatedAt: request.updatedAt.toISOString(),
+    })));
   } catch (error) {
     next(error);
   }

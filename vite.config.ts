@@ -4,6 +4,9 @@ import path from "path";
 
 export default defineConfig({
   plugins: [react()],
+  optimizeDeps: {
+    include: ["leaflet"],
+  },
   resolve: {
     extensions: [".js", ".jsx", ".ts", ".tsx", ".json"],
     alias: {
@@ -61,11 +64,6 @@ export default defineConfig({
       "/api": {
         target: "http://127.0.0.1:5000",
         changeOrigin: true,
-      },
-      "/socket.io": {
-        target: "http://127.0.0.1:5000",
-        changeOrigin: true,
-        ws: true,
       },
     },
   },

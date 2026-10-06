@@ -1,4 +1,9 @@
-import { API_BASE_URL, getAuthToken } from "./api";
+import {
+  API_BASE_URL,
+  authExpiredEventName,
+  clearAuthToken,
+  getAuthToken,
+} from "./api";
 
 export interface RealtimeRequest {
   id: string;
@@ -21,116 +26,143 @@ export type RealtimeEventName =
 type EventPayload = RealtimeRequest | DeletedRequest;
 type EventListener = (payload: EventPayload) => void;
 type ConnectionListener = () => void;
+type RequestSnapshot = RealtimeRequest & { updatedAt: string };
 
 const eventListeners = new Map<RealtimeEventName, Set<EventListener>>();
 const connectionListeners = new Set<ConnectionListener>();
-let pollIntervals: Map<string, NodeJS.Timer> = new Map();
-let lastCheckTimes: Map<string, number> = new Map();
+const pollIntervals = new Map<string, ReturnType<typeof setInterval>>();
+const snapshots = new Map<string, Map<string, RequestSnapshot>>();
+const pollingResources = new Set<string>();
+const resourceConnections = new Map<string, boolean>();
+let connectedToken: string | null = null;
 let isConnected = false;
+let connectionGeneration = 0;
 
-const POLL_INTERVAL = 7000; // 7 seconds
-
-function attachListeners() {
-  for (const listener of connectionListeners) {
-    listener();
-  }
-  isConnected = true;
-}
+const POLL_INTERVAL = 7000;
+const RESOURCES = ["complaints", "assistance-requests"];
 
 export function connectRealtime(token = getAuthToken()): void {
   if (!token || typeof window === "undefined") {
     disconnectRealtime();
     return;
   }
+  if (connectedToken === token) return;
 
   disconnectRealtime();
-  attachListeners();
-
-  // Start polling for complaints
-  startPolling("complaints", token);
-  // Start polling for assistance requests
-  startPolling("assistance-requests", token);
+  connectedToken = token;
+  const generation = connectionGeneration;
+  for (const resource of RESOURCES) resourceConnections.set(resource, false);
+  startPolling("complaints", token, generation);
+  startPolling("assistance-requests", token, generation);
 }
 
-function startPolling(resource: string, token: string) {
-  // Initial call
-  pollResource(resource, token);
-
-  // Set up interval
-  const interval = setInterval(() => {
-    pollResource(resource, token);
-  }, POLL_INTERVAL);
-
+function startPolling(resource: string, token: string, generation: number): void {
+  void pollResource(resource, token, generation);
+  const interval = setInterval(
+    () => void pollResource(resource, token, generation),
+    POLL_INTERVAL,
+  );
   pollIntervals.set(resource, interval);
 }
 
-async function pollResource(resource: string, token: string) {
-  try {
-    const lastCheck = lastCheckTimes.get(resource) || 0;
-    const response = await fetch(
-      `${API_BASE_URL}/polling/${resource}?since=${lastCheck}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
+async function pollResource(
+  resource: string,
+  token: string,
+  generation: number,
+): Promise<void> {
+  const pollingKey = `${generation}:${resource}`;
+  if (pollingResources.has(pollingKey) || generation !== connectionGeneration) return;
+  pollingResources.add(pollingKey);
 
-    if (response.status === 401) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/polling/${resource}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (generation !== connectionGeneration) return;
+
+    if (response.status === 401 || response.status === 403) {
+      clearAuthToken();
+      window.dispatchEvent(new Event(authExpiredEventName));
       disconnectRealtime();
       return;
     }
+    if (!response.ok) {
+      throw new Error(`Polling ${resource} failed with status ${response.status}.`);
+    }
 
-    if (!response.ok) return;
+    const records = await response.json() as RequestSnapshot[];
+    if (generation !== connectionGeneration) return;
+    const previous = snapshots.get(resource);
+    const current = new Map(records.map((record) => [record.id, record]));
 
-    const data = await response.json();
-    lastCheckTimes.set(resource, Date.now());
-
-    // Process changes
-    if (data.created?.length) {
-      for (const item of data.created) {
-        const eventName = `${resource === "complaints" ? "complaint" : "assistance"}:created` as RealtimeEventName;
-        emitToListeners(eventName, { id: item.id, userId: item.userId });
+    if (previous) {
+      const eventNames = resource === "complaints"
+        ? {
+            created: "complaint:created",
+            updated: "complaint:updated",
+            deleted: "complaint:deleted",
+          }
+        : {
+            created: "assistance:created",
+            updated: "assistance:updated",
+            deleted: "assistance:deleted",
+          };
+      for (const record of records) {
+        const oldRecord = previous.get(record.id);
+        if (!oldRecord) {
+          emitToListeners(eventNames.created, record);
+        } else if (oldRecord.updatedAt !== record.updatedAt) {
+          emitToListeners(eventNames.updated, record);
+        }
+      }
+      for (const oldRecord of previous.values()) {
+        if (!current.has(oldRecord.id)) {
+          emitToListeners(eventNames.deleted, oldRecord);
+        }
       }
     }
 
-    if (data.updated?.length) {
-      for (const item of data.updated) {
-        const eventName = `${resource === "complaints" ? "complaint" : "assistance"}:updated` as RealtimeEventName;
-        emitToListeners(eventName, { id: item.id, userId: item.userId });
-      }
-    }
-
-    if (data.deleted?.length) {
-      for (const item of data.deleted) {
-        const eventName = `${resource === "complaints" ? "complaint" : "assistance"}:deleted` as RealtimeEventName;
-        emitToListeners(eventName, { id: item.id, userId: item.userId });
-      }
-    }
+    snapshots.set(resource, current);
+    updateResourceConnection(resource, true);
   } catch (error) {
-    console.error(`Polling error for ${resource}:`, error);
+    if (generation === connectionGeneration) {
+      updateResourceConnection(resource, false);
+      console.error(`Polling error for ${resource}:`, error);
+    }
+  } finally {
+    pollingResources.delete(pollingKey);
   }
 }
 
-function emitToListeners(eventName: RealtimeEventName, payload: EventPayload) {
-  const listeners = eventListeners.get(eventName);
-  if (listeners) {
-    for (const listener of listeners) {
-      listener(payload);
-    }
+function updateResourceConnection(resource: string, connected: boolean): void {
+  resourceConnections.set(resource, connected);
+  const allConnected = RESOURCES.every((name) => resourceConnections.get(name));
+  if (isConnected === allConnected) return;
+  isConnected = allConnected;
+  if (isConnected) {
+    for (const listener of connectionListeners) listener();
   }
+}
+
+function emitToListeners(eventName: RealtimeEventName, payload: EventPayload): void {
+  const listeners = eventListeners.get(eventName);
+  if (!listeners) return;
+  for (const listener of listeners) listener(payload);
 }
 
 export function disconnectRealtime(): void {
   pollIntervals.forEach((interval) => clearInterval(interval));
   pollIntervals.clear();
-  lastCheckTimes.clear();
+  snapshots.clear();
+  resourceConnections.clear();
+  connectionGeneration += 1;
+  connectedToken = null;
   isConnected = false;
 }
 
 export function subscribeRealtime(
   eventName: RealtimeEventName,
-  listener: EventListener
+  listener: EventListener,
 ): () => void {
   let listeners = eventListeners.get(eventName);
   if (!listeners) {
@@ -147,9 +179,7 @@ export function subscribeRealtime(
 
 export function onRealtimeConnect(listener: ConnectionListener): () => void {
   connectionListeners.add(listener);
-  if (isConnected) {
-    listener();
-  }
+  if (isConnected) listener();
   return () => {
     connectionListeners.delete(listener);
   };

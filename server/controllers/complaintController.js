@@ -266,7 +266,6 @@ async function update(req, res) {
     }
   }
 
-  emitRequestChanged("complaint:updated", complaint);
   return res.json({ complaint });
 }
 

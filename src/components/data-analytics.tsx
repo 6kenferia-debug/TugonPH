@@ -82,9 +82,15 @@ type TimePeriod = "daily" | "weekly" | "monthly" | "yearly" | "previous-years";
 const COMPLAINT_COLOR = "#6366f1";
 const ASSISTANCE_COLOR = "#10b981";
 const RESOLVED_COLOR = "#22c55e";
-const PENDING_COLOR = "#f59e0b";
-const IN_PROGRESS_COLOR = "#3b82f6";
+const PENDING_COLOR = "#3b82f6";
+const IN_PROGRESS_COLOR = "#f59e0b";
 const REJECTED_COLOR = "#ef4444";
+const STATUS_COLORS: Record<string, string> = {
+  pending: PENDING_COLOR,
+  "in-progress": IN_PROGRESS_COLOR,
+  resolved: RESOLVED_COLOR,
+  rejected: REJECTED_COLOR,
+};
 const CHART_TEXT = "hsl(var(--foreground))";
 const CHART_MUTED = "hsl(var(--muted-foreground))";
 const CHART_GRID = "hsl(var(--border))";
@@ -430,7 +436,7 @@ export function DataAnalytics({
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <Card className="border-2 border-indigo-200  shadow-md bg-gradient-to-br from-indigo-50 to-indigo-100/50  ">
+        <Card className="border-2 border-indigo-200 shadow-md bg-card">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               <MessageSquare className="w-4 h-4 text-indigo-500 " />
@@ -449,7 +455,7 @@ export function DataAnalytics({
             </p>
           </CardContent>
         </Card>
-        <Card className="border-2 border-emerald-200  shadow-md bg-gradient-to-br from-emerald-50 to-emerald-100/50  ">
+        <Card className="border-2 border-emerald-200 shadow-md bg-card">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               <Heart className="w-4 h-4 text-emerald-500 " />
@@ -468,7 +474,7 @@ export function DataAnalytics({
             </p>
           </CardContent>
         </Card>
-        <Card className="border-2 border-green-200  shadow-md bg-gradient-to-br from-green-50 to-green-100/50  ">
+        <Card className="border-2 border-green-200 shadow-md bg-card">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-green-500 " />
@@ -485,7 +491,7 @@ export function DataAnalytics({
             </p>
           </CardContent>
         </Card>
-        <Card className="border-2 border-amber-200  shadow-md bg-gradient-to-br from-amber-50 to-amber-100/50  ">
+        <Card className="border-2 border-amber-200 shadow-md bg-card">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               <Clock className="w-4 h-4 text-amber-500 " />
@@ -504,7 +510,7 @@ export function DataAnalytics({
       </div>
 
       {/* Insights & Suggestions Section */}
-      <Card className="border-2 border-purple-200  shadow-md bg-gradient-to-br from-blue-50/70 via-purple-50/50 to-pink-50/40   ">
+      <Card className="border-2 border-purple-200 shadow-md bg-card">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Trophy className="w-5 h-5 text-amber-500" />
@@ -622,7 +628,7 @@ export function DataAnalytics({
             return insights.map((insight, idx) => (
               <div
                 key={idx}
-                className="flex items-start gap-3 p-3 rounded-lg bg-white/50  border border-white/80  backdrop-blur-sm"
+                className="flex items-start gap-3 p-3 rounded-lg bg-card border border-border"
               >
                 <div
                   className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${insight.color} ${insight.bgColor}`}
@@ -646,7 +652,7 @@ export function DataAnalytics({
       {/* Overview Tab */}
       {activeTab === "overview" && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card className="lg:col-span-2 border-2 border-slate-200  shadow-md bg-gradient-to-br from-slate-50 to-slate-100/50  ">
+          <Card className="lg:col-span-2 border-2 border-slate-200 shadow-md bg-card">
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2">
                 <TrendingUp className="w-5 h-5 text-primary" />
@@ -712,7 +718,7 @@ export function DataAnalytics({
             </CardContent>
           </Card>
 
-          <Card className="border-2 border-indigo-200  shadow-md bg-gradient-to-br from-indigo-50/70 to-indigo-100/50  ">
+          <Card className="border-2 border-indigo-200 shadow-md bg-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <MessageSquare className="w-5 h-5 text-indigo-500 " />
@@ -747,17 +753,10 @@ export function DataAnalytics({
                         </text>
                       )}
                     >
-                      {complaintStatusPie.map((_, i) => (
+                      {complaintStatusPie.map((status) => (
                         <Cell
-                          key={i}
-                          fill={
-                            [
-                              PENDING_COLOR,
-                              IN_PROGRESS_COLOR,
-                              RESOLVED_COLOR,
-                              REJECTED_COLOR,
-                            ][i % 4]
-                          }
+                          key={status.name}
+                          fill={STATUS_COLORS[status.name] ?? CHART_MUTED}
                         />
                       ))}
                     </Pie>
@@ -774,7 +773,7 @@ export function DataAnalytics({
             </CardContent>
           </Card>
 
-          <Card className="border-2 border-emerald-200  shadow-md bg-gradient-to-br from-emerald-50/70 to-emerald-100/50  ">
+          <Card className="border-2 border-emerald-200 shadow-md bg-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Heart className="w-5 h-5 text-emerald-500 " />
@@ -809,17 +808,10 @@ export function DataAnalytics({
                         </text>
                       )}
                     >
-                      {assistanceStatusPie.map((_, i) => (
+                      {assistanceStatusPie.map((status) => (
                         <Cell
-                          key={i}
-                          fill={
-                            [
-                              PENDING_COLOR,
-                              IN_PROGRESS_COLOR,
-                              RESOLVED_COLOR,
-                              REJECTED_COLOR,
-                            ][i % 4]
-                          }
+                          key={status.name}
+                          fill={STATUS_COLORS[status.name] ?? CHART_MUTED}
                         />
                       ))}
                     </Pie>
@@ -836,7 +828,7 @@ export function DataAnalytics({
             </CardContent>
           </Card>
 
-          <Card className="lg:col-span-2 border-2 border-cyan-200  shadow-md bg-gradient-to-br from-cyan-50/70 to-cyan-100/50  ">
+          <Card className="lg:col-span-2 border-2 border-cyan-200 shadow-md bg-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <TrendingUp className="w-5 h-5 text-cyan-500 " />

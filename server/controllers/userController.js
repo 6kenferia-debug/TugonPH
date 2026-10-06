@@ -18,9 +18,6 @@ async function updateUser(req, res) {
   }
   const user = await User.findByIdAndUpdate(req.params.userId, updates, { returnDocument: "after", runValidators: true });
   if (!user) return res.status(404).json({ error: "User not found." });
-  if (!user.isActive || user.accountStatus !== "approved") {
-    disconnectUserSockets(user.id);
-  }
   return res.json({ profile: serializeUser(user) });
 }
 

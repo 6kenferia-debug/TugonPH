@@ -177,7 +177,7 @@ export function AssistanceForm({ onSubmit }: AssistanceFormProps) {  const [tit
 
   return (
     <div className="max-w-2xl mx-auto">
-      <Card>
+      <Card className="shadow-lg shadow-[#35408E]/15">
         <CardHeader className="bg-gradient-to-r from-primary to-accent text-primary-foreground pb-8">
           <CardTitle className="text-lg sm:text-xl font-normal">
             {"Request Assistance"}

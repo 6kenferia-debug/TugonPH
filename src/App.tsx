@@ -1052,10 +1052,8 @@ function AppContent() {
                     return (
                       <div
                         key={notification.id}
-                        className={`flex w-full items-start gap-3 rounded-lg border p-4 transition-colors ${
-                          notification.read
-                            ? "bg-background border-border"
-                            : "bg-primary/5 border-primary/30"
+                        className={`flex w-full items-start gap-3 rounded-lg border p-4 transition-colors bg-card ${
+                          notification.read ? "border-border" : "border-primary/30"
                         }`}
                       >
                         <button
@@ -1353,7 +1351,7 @@ function AppContent() {
         setShowHistoryDialog(open);
         if (!open) setRequestHistory([]);
       }}>
-        <DialogContent className="flex max-h-[90vh] min-w-0 flex-col overflow-hidden px-4 sm:px-6">
+        <DialogContent className="flex w-full max-w-2xl max-h-[90vh] min-w-0 flex-col overflow-hidden bg-card px-4 sm:px-6">
           <DialogHeader className="min-w-0 shrink-0">
             <DialogTitle>{"Request History"}</DialogTitle>
             <DialogDescription className="break-words [overflow-wrap:anywhere]">
@@ -1377,7 +1375,7 @@ function AppContent() {
                   const entrySummary = entry.details && entry.details.trim() ? entry.details : entry.action;
 
                   return (
-                    <div key={entry.id} className="w-full min-w-0 rounded-lg border border-border bg-muted/30 p-4">
+                    <div key={entry.id} className="w-full min-w-0 rounded-lg border border-border bg-card p-4">
                       <div className="flex min-w-0 items-start gap-3">
                         <div className="min-w-0 flex-1">
                           <p className="break-words font-medium text-foreground [overflow-wrap:anywhere]">{entry.action}</p>

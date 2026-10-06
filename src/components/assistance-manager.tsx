@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { api } from "../services/api";
-import { onRealtimeConnect, subscribeRealtime } from "../services/socket";
+import { onRealtimeConnect, subscribeRealtime } from "../services/polling";
 import { toast } from "sonner@2.0.3";
 import { useAuth } from "./auth/auth-context";
 
