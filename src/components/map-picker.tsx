@@ -328,7 +328,7 @@ export function MapPicker({ initialCoordinates, onLocationSelect, onClose }: Map
             {selectedCoords
               ? geocoding
                 ? "Getting address…"
-                : `📍 ${address || `${selectedCoords.lat.toFixed(5)}, ${selectedCoords.lng.toFixed(5)}`}`
+                : `${address || `${selectedCoords.lat.toFixed(5)}, ${selectedCoords.lng.toFixed(5)}`}`
               : "Click inside the blue boundary to pin your location"}
           </div>
         </div>

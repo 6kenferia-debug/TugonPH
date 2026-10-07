@@ -76,7 +76,7 @@ export function LoginForm({ onSwitchToSignup }: LoginFormProps) {
           "Invalid email or password. Please check your credentials and try again.",
         );
         toast.error(
-          `❌ Invalid email or password. Please check your credentials and try again.`,
+          `Invalid email or password. Please check your credentials and try again.`,
         );
       } else if (
         result.error.toLowerCase().includes("not found") ||
@@ -86,7 +86,7 @@ export function LoginForm({ onSwitchToSignup }: LoginFormProps) {
           `No account found for "${email}". Please sign up first or check your email address.`,
         );
         toast.error(
-          `⚠️ No account found for "${email}". Please sign up first or check your email address.`,
+          `No account found for "${email}". Please sign up first or check your email address.`,
         );
       } else if (
         result.error.toLowerCase().includes("disabled") ||
@@ -96,14 +96,14 @@ export function LoginForm({ onSwitchToSignup }: LoginFormProps) {
           "Your account has been disabled. Please contact support for assistance.",
         );
         toast.error(
-          "⚠️ Your account has been disabled. Please contact support for assistance.",
+          "Your account has been disabled. Please contact support for assistance.",
         );
       } else {
         setAuthError(result.error);
         toast.error(result.error);
       }
     } else {
-      toast.success("🎉 Welcome back to TugonPH!");
+      toast.success("Welcome back to TugonPH!");
     }
     setLoading(false);
   };

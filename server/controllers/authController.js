@@ -1,9 +1,13 @@
 const crypto = require("node:crypto");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const Complaint = require("../models/Complaint");
+const AssistanceRequest = require("../models/AssistanceRequest");
+const RequestHistory = require("../models/RequestHistory");
 const User = require("../models/User");
 const { sendVerificationCode, sendPasswordRecoveryCode } = require("../services/email");
 const { validatePassword } = require("../services/password-policy");
+const { removeOwnedPublicFileUrl } = require("../services/storage-service");
 
 const OTP_LENGTH = 6;
 const OTP_EXPIRATION_MINUTES = 10;
@@ -112,16 +116,109 @@ async function updateNotificationSettings(req, res, next) {
 }
 
 async function deleteCurrentUserAccount(req, res, next) {
+  const session = await User.startSession();
+  let filesToRemove = [];
+
   try {
-    const user = await User.findById(req.user._id);
-    if (!user) {
-      return res.status(404).json({ error: "Authenticated account not found.", code: "ACCOUNT_NOT_FOUND" });
+    await session.withTransaction(async () => {
+      const user = await User.findById(req.user._id).session(session);
+      if (!user) {
+        const error = new Error("Authenticated account not found.");
+        error.status = 404;
+        error.code = "ACCOUNT_NOT_FOUND";
+        throw error;
+      }
+
+      filesToRemove = [];
+      if (user.profilePictureUrl) {
+        filesToRemove.push({
+          fileUrl: user.profilePictureUrl,
+          kind: "profile",
+          ownerId: user.id,
+        });
+      }
+
+      const complaints = await Complaint.find({ userId: user._id })
+        .select("_id resolutionProofImage")
+        .session(session)
+        .lean();
+      const assistanceRequests = await AssistanceRequest.find({ userId: user._id })
+        .select("_id resolutionProofImage")
+        .session(session)
+        .lean();
+
+      for (const complaint of complaints) {
+        if (complaint.resolutionProofImage) {
+          filesToRemove.push({
+            fileUrl: complaint.resolutionProofImage,
+            kind: "complaint-proof",
+            ownerId: String(complaint._id),
+          });
+        }
+      }
+      for (const request of assistanceRequests) {
+        if (request.resolutionProofImage) {
+          filesToRemove.push({
+            fileUrl: request.resolutionProofImage,
+            kind: "assistance-proof",
+            ownerId: String(request._id),
+          });
+        }
+      }
+
+      const complaintIds = complaints.map(({ _id }) => _id);
+      const assistanceRequestIds = assistanceRequests.map(({ _id }) => _id);
+
+      if (complaintIds.length) {
+        await Complaint.deleteMany({
+          _id: { $in: complaintIds },
+          userId: user._id,
+        }).session(session);
+        await RequestHistory.deleteMany({
+          requestType: "complaint",
+          requestId: { $in: complaintIds },
+        }).session(session);
+      }
+      if (assistanceRequestIds.length) {
+        await AssistanceRequest.deleteMany({
+          _id: { $in: assistanceRequestIds },
+          userId: user._id,
+        }).session(session);
+        await RequestHistory.deleteMany({
+          requestType: "assistance",
+          requestId: { $in: assistanceRequestIds },
+        }).session(session);
+      }
+
+      const deletion = await User.deleteOne({ _id: user._id }).session(session);
+      if (!deletion.deletedCount) {
+        const error = new Error("Authenticated account not found.");
+        error.status = 404;
+        error.code = "ACCOUNT_NOT_FOUND";
+        throw error;
+      }
+    });
+
+    const cleanupFailures = [];
+    for (const file of filesToRemove) {
+      try {
+        await removeOwnedPublicFileUrl(file.fileUrl, file.kind, file.ownerId);
+      } catch (error) {
+        console.error(`Failed to remove account-owned ${file.kind} file:`, error);
+        cleanupFailures.push(file.kind);
+      }
     }
 
-    await user.deleteOne();
-    return res.json({ message: "Account deleted successfully." });
+    return res.json({
+      message: "Account deleted successfully.",
+      ...(cleanupFailures.length
+        ? { warning: "The account was deleted, but some uploaded files could not be removed." }
+        : {}),
+    });
   } catch (error) {
     return next(error);
+  } finally {
+    await session.endSession();
   }
 }
 

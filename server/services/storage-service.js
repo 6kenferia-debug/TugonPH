@@ -1,7 +1,7 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs/promises");
 const path = require("node:path");
-const { del, put } = require("@vercel/blob");
+const { BlobNotFoundError, del, head, put } = require("@vercel/blob");
 
 const UPLOAD_ROOT = path.resolve(__dirname, "..", "uploads");
 const PUBLIC_ROOT = path.join(UPLOAD_ROOT, "public");
@@ -135,6 +135,91 @@ async function removePublicFileUrl(fileUrl) {
   return true;
 }
 
+async function removeOwnedPublicFileUrl(fileUrl, kind, ownerId) {
+  if (typeof fileUrl !== "string" || !/^[a-f\d]{24}$/i.test(ownerId)) return false;
+
+  let parsed;
+  try {
+    parsed = new URL(fileUrl);
+  } catch {
+    return false;
+  }
+
+  let relativePath;
+  const blobUrl = parsed.protocol === "https:" &&
+    (
+      parsed.hostname === "public.blob.vercel-storage.com" ||
+      parsed.hostname.endsWith(".public.blob.vercel-storage.com")
+    );
+
+  if (blobUrl && process.env.BLOB_READ_WRITE_TOKEN) {
+    try {
+      relativePath = decodeURIComponent(parsed.pathname).replace(/^\/+/, "");
+    } catch {
+      return false;
+    }
+  } else {
+    const publicApiUrl = process.env.PUBLIC_API_URL ||
+      (process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}/api`
+        : `http://localhost:${process.env.PORT || 5000}/api`);
+    const configuredBase = new URL(publicApiUrl);
+    const prefix = "/api/uploads/";
+    if (parsed.origin !== configuredBase.origin || !parsed.pathname.startsWith(prefix)) {
+      return false;
+    }
+    try {
+      relativePath = decodeURIComponent(parsed.pathname.slice(prefix.length));
+    } catch {
+      return false;
+    }
+  }
+
+  const ownedPathByKind = {
+    profile: new RegExp(`^profile/${ownerId}/[a-f\\d-]+\\.(?:jpg|png|webp|gif)$`, "i"),
+    "complaint-proof": new RegExp(
+      `^resolution/complaints/${ownerId}/[a-f\\d-]+\\.(?:jpg|png|webp)$`,
+      "i",
+    ),
+    "assistance-proof": new RegExp(
+      `^resolution/assistance/${ownerId}/[a-f\\d-]+\\.(?:jpg|png|webp)$`,
+      "i",
+    ),
+  };
+  if (!ownedPathByKind[kind]?.test(relativePath)) return false;
+
+  if (blobUrl && process.env.BLOB_READ_WRITE_TOKEN) {
+    try {
+      await head(fileUrl);
+    } catch (error) {
+      if (error instanceof BlobNotFoundError) return false;
+      throw error;
+    }
+    await del(fileUrl);
+    return true;
+  }
+
+  const absolutePath = safeResolve(PUBLIC_ROOT, relativePath);
+  let realPath;
+  try {
+    realPath = await fs.realpath(absolutePath);
+  } catch (error) {
+    if (error.code === "ENOENT") return false;
+    throw error;
+  }
+  const realPublicRoot = await fs.realpath(PUBLIC_ROOT);
+  if (realPath !== realPublicRoot && !realPath.startsWith(`${realPublicRoot}${path.sep}`)) {
+    return false;
+  }
+  try {
+    await fs.rm(absolutePath);
+  } catch (error) {
+    if (error.code === "ENOENT") return false;
+    throw error;
+  }
+  return true;
+}
+
 function publicFileUrl(stored) {
   if (stored.url) return stored.url;
   const base = (process.env.PUBLIC_API_URL ||
@@ -150,6 +235,7 @@ module.exports = {
   PUBLIC_ROOT,
   UPLOAD_ROOT,
   getPublicFilePath,
+  removeOwnedPublicFileUrl,
   publicFileUrl,
   removePublicFileUrl,
   removeStoredFile,

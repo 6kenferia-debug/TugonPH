@@ -113,12 +113,16 @@ export function ResidentSettings() {
 
   const handleDeleteAccount = async () => {
     setDeletingAccount(true);
-    const { error } = await deleteAccount();
+    const { error, warning } = await deleteAccount();
 
     if (error) {
       toast.error(error);
     } else {
-      toast.success("Account deleted successfully");
+      if (warning) {
+        toast.warning(warning);
+      } else {
+        toast.success("Account deleted successfully");
+      }
       await signOut();
     }
     setDeletingAccount(false);

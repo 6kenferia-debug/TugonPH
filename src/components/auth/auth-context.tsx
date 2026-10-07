@@ -71,7 +71,7 @@ interface AuthContextType {
   ) => Promise<{ error?: string }>;
   updateEmailNotifications: (enabled: boolean) => Promise<{ error?: string }>;
   uploadProfilePicture: (file: File) => Promise<{ error?: string }>;
-  deleteAccount: () => Promise<{ error?: string }>;
+  deleteAccount: () => Promise<{ error?: string; warning?: string }>;
   refreshProfile: () => Promise<void>;
 }
 
@@ -368,8 +368,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const deleteAccount = async () => {
     try {
-      await api.delete<{ message: string }>("/auth/profile");
-      return {};
+      const result = await api.delete<{ message: string; warning?: string }>("/auth/profile");
+      return { warning: result.warning };
     } catch (error) {
       return {
         error: error instanceof Error ? error.message : "Account deletion failed.",

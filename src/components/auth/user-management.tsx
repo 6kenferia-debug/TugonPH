@@ -140,7 +140,7 @@ export function UserManagement() {
         status: "verified",
       });
       await fetchUsers();
-      toast.success("✅ User account approved successfully");
+      toast.success("User account approved successfully");
       setShowDetailsDialog(false);
     } catch (error) {
       console.error("Error approving user:", error);

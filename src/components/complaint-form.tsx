@@ -185,7 +185,7 @@ export function ComplaintForm({ onSubmit }: ComplaintFormProps) {  const [title
       result.address || `${result.lat.toFixed(6)}, ${result.lng.toFixed(6)}`,
     );
     setShowMap(false);
-    toast.success("📍 Location pinned successfully!");
+    toast.success("Location pinned successfully!");
   };
 
   return (

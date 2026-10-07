@@ -247,7 +247,7 @@ export function SignupForm({ onSwitchToLogin }: SignupFormProps) {
     setCooldown(60);
     setOtpDigits(["", "", "", "", "", ""]);
     setOtpError(null);
-    toast.success("📧 Verification code sent to your email.");
+    toast.success("Verification code sent to your email.");
   };
 
   // ── OTP digit input handler ─────────────────────────────────────────────────
@@ -314,7 +314,7 @@ export function SignupForm({ onSwitchToLogin }: SignupFormProps) {
 
       setStep("pending");
       toast.success(
-        "🎉 Email verified! Your registration is pending admin approval.",
+        "Email verified! Your registration is pending admin approval.",
       );
     } catch {
       setOtpError("An unexpected error occurred. Please try again.");
@@ -335,7 +335,7 @@ export function SignupForm({ onSwitchToLogin }: SignupFormProps) {
         setCooldown(60);
         setOtpDigits(["", "", "", "", "", ""]);
         setOtpError(null);
-        toast.success("📧 New OTP sent!");
+        toast.success("New OTP sent!");
         setTimeout(() => otpInputRefs.current[0]?.focus(), 100);
       }
     } finally {
@@ -373,7 +373,7 @@ export function SignupForm({ onSwitchToLogin }: SignupFormProps) {
           <div className="flex items-center gap-3 p-4 bg-green-50  border border-green-200  rounded-lg">
             <Check className="w-5 h-5 text-green-600  shrink-0" />
             <p className="text-sm text-green-800 ">
-              ✅ Email verified &bull; registration awaiting admin review.
+              Email verified &bull; registration awaiting admin review.
             </p>
           </div>
 
