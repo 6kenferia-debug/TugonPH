@@ -1,171 +1,200 @@
 # TugonPH
 
-A barangay service management system built with React, TypeScript, Vite, Express, MongoDB, JWT authentication, and local filesystem storage. TugonPH helps residents and guests submit complaints or assistance requests, while administrators manage submissions, verify accounts, review analytics, and monitor request locations in real time.
+TugonPH is a barangay service system made for fast and clear public service. It helps residents and guests send complaints or requests for help. It also helps admins review requests, verify users, check reports, and manage service records.
+
+This project uses React, TypeScript, Vite, Express, MongoDB, and JWT for secure access.
 
 ![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)
 ![React](https://img.shields.io/badge/React-18.3.1-61dafb.svg)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178c6.svg)
 ![MongoDB](https://img.shields.io/badge/MongoDB-TugonPH-47A248.svg)
 
-## Features
+## What this app does
 
-### For Residents
+TugonPH is built to make barangay services easier to handle. It helps people report problems and ask for support. It also gives admins a clean place to manage requests, monitor activity, and review records.
 
-- **Complaint Submission** - Report barangay concerns with required photo evidence, contact validation, and optional pinned map location.
-- **Assistance Submission** - Request barangay support for health services, emergencies, financial aid, medical assistance, senior citizen support, PWD assistance, food assistance, disaster relief, burial assistance, and scholarship or educational assistance.
-- **Unified Dashboard** - View complaints and assistance requests together with searchable, filterable request lists and combined status totals.
-- **Status Tracking** - Track pending, in-progress, resolved, and rejected requests with admin notes.
-- **Web Notifications** - Receive complaint and assistance activity updates with unread/read tracking.
-- **Profile and Settings** - Manage profile details, notifications, theme, and resident settings.
+## Main features
 
-### For Guests
+### For residents
 
-- **Anonymous Submission Mode** - Continue as guest and submit either a complaint or assistance request without creating an account.
-- **Guest Request Labels** - Anonymous submissions are recorded with generated names such as `Anonymous001`.
-- **Photo and Contact Requirements** - Guest submissions follow the same evidence and 11-digit contact number validation as resident submissions.
+- **Send complaints** - Report barangay concerns with a photo, valid contact number, and optional location pin.
+- **Send assistance requests** - Ask for help with health needs, emergency support, food, burial, financial aid, scholarship help, and other barangay-related needs.
+- **View all requests in one place** - Check your complaints and assistance requests in one dashboard.
+- **Track status** - See whether a request is pending, in progress, resolved, or rejected.
+- **Read notifications** - Get updates on request activity and see which messages are read or unread.
+- **Manage profile** - Update your account details, email settings, password, and access information.
 
-### For Administrators
+### For guests
 
-- **Complaint and Assistance Management** - Review, filter, prioritize, update status, add admin notes, and delete eligible records.
-- **Account Approval Workflow** - Approve or reject pending accounts after email verification.
-- **Combined Heatmap Dashboard** - View geotagged complaints and assistance requests together, with category filtering.
-- **Data Analytics** - Analyze complaint and assistance volume, status breakdowns, categories, trends, insights, and CSV exports.
-- **User Management** - Manage resident accounts, permissions, and account verification state.
+- **Submit without an account** - Guests can send a complaint or request without creating a profile.
+- **Use anonymous labels** - Guest submissions are tagged with generated names like `Anonymous001`.
+- **Follow same rules** - Guests must still provide valid proof and a correct 11-digit phone number.
 
-### General Features
+### For admins
 
-- **Role-Based Access Control** - Separate resident, guest, and admin capabilities.
-- **Pending Approval Enforcement** - New verified registrations remain pending until admin approval.
-- **Strict Contact Validation** - Contact numbers are normalized and validated as 11-digit numeric values.
-- **Real-Time Sync** - Authenticated residents receive changes for their own complaints and assistance requests; admins receive all request changes through authenticated polling. REST and MongoDB remain the source of truth.
-- **Responsive Interface** - Optimized for desktop and mobile layouts.
+- **Manage requests** - Review, filter, sort, update, and delete valid entries when needed.
+- **Approve accounts** - Review new accounts after email verification.
+- **Use heatmap data** - View complaint and assistance locations in one map view.
+- **Check analytics** - Study patterns, status counts, categories, and trends. Export data as CSV when needed.
+- **Manage users** - Handle residents, permissions, and account verification.
 
-## Tech Stack
+### General features
+
+- **Role-based access** - Residents, guests, and admins each have different permissions.
+- **Approval before access** - New verified accounts stay pending until an admin approves them.
+- **Strong contact validation** - Phone numbers are checked and saved as valid 11-digit numbers.
+- **Auto update system** - The app checks for request changes and refreshes related data when needed.
+- **Works on desktop and mobile** - The interface is designed to fit both small and large screens.
+
+## Tech stack
 
 ### Frontend
 
 - **React 18.3.1** - UI library
-- **TypeScript** - Type-safe JavaScript
-- **Vite 6** - Build tool and development server
-- **Tailwind CSS** - Utility-first styling
-- **Radix UI** - Accessible component primitives
-- **Lucide React** - Icon library
-- **Recharts** - Analytics charts
-- **Leaflet and leaflet.heat** - Mapping and heatmap visualization
-- **React Hook Form** - Form validation and management
+- **TypeScript** - Safer JavaScript with clear types
+- **Vite 6** - Fast development and build tool
+- **Tailwind CSS** - Simple and flexible styling
+- **Radix UI** - Access-friendly UI components
+- **Lucide React** - Icons
+- **Recharts** - Charts and analytics
+- **Leaflet and leaflet.heat** - Maps and heatmap display
+- **React Hook Form** - Form handling and validation
 - **Sonner** - Toast notifications
 
-### Backend and Database
+### Backend and database
 
-- **Express and Mongoose** - REST API and MongoDB Atlas database (`TugonPH`)
-- **Polling** - Authenticated request-change detection over the REST API
-- **Local Filesystem Storage** - Profile pictures and resolution proofs are stored locally on the server
+- **Express and Mongoose** - API layer and MongoDB connection
+- **Polling** - Checks for request updates through the API
+- **Image storage** - Profile pictures and proof images use local storage in development and Vercel Blob in deployment
 
-## Prerequisites
+## Requirements
 
-- **Node.js** v16 or higher
+- **Node.js** version 20 or higher
 - **npm**, **yarn**, or **pnpm**
-- A MongoDB Atlas cluster, database user, and network access entry for your current IP
+- A MongoDB Atlas account, database user, and access to your current IP
+
+## Deploy to Vercel
+
+The frontend and backend are planned to work as one Vercel project. The API runs under `/api`, and uploaded images are stored in Vercel Blob instead of the temporary server filesystem.
+
+1. Import the project into Vercel. If the project is inside a `client` folder, set the root directory to `client`.
+2. Use Node.js 20 or later. Vercel should detect Vite automatically. Use `npm run build` as the build command and `dist` as the output folder.
+3. Create a Blob storage in the Vercel project and connect it. This gives the app the `BLOB_READ_WRITE_TOKEN` value.
+4. Add these environment variables in Vercel for production and preview:
+   - `MONGODB_URI` - MongoDB Atlas connection string
+   - `JWT_SECRET` - Strong secret key
+   - `BLOB_READ_WRITE_TOKEN` - Token from the connected Blob store
+   - `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_SECURE`, `EMAIL_USER`, `EMAIL_PASSWORD` - Email settings for OTP and recovery features
+   - Optional: `EMAIL_FROM`
+5. In MongoDB Atlas, allow access from Vercel server functions. If needed, allow `0.0.0.0/0` for the database connection. Use a dedicated database user with a strong password.
+6. Deploy the project and test the API at `https://<your-domain>/api/health`. A healthy response should show `"status":"ok"` and `"mongo":"connected"`.
+
+The frontend normally uses the same `/api` path. Do not set `VITE_API_URL` to a localhost address in Vercel. If the frontend and API are on different domains, set `VITE_API_URL` to the API URL and configure `CORS_ALLOWED_ORIGINS` with the correct frontend origin.
+
+Vercel has a request size limit. This is lower than the app's local upload limits. Keep uploaded files below the platform limit to avoid errors.
 
 ## Installation
 
-1. Clone the repository:
+1. Clone the project:
 
    ```bash
-   git clone link TugonPH
+   git clone <project-link>
    cd TugonPH
    ```
 
-2. Install dependencies:
+2. Install the dependencies:
 
    ```bash
    npm install
    ```
 
-3. Create the backend environment file from the example, then replace the MongoDB URI placeholders with the Atlas connection string and database user credentials:
+3. Make the backend environment file from the example and update the MongoDB values:
 
    ```bash
    cp server/.env.example server/.env
    ```
 
-   Keep `TugonPH` as the database name in the URI. Do not commit or share `server/.env`.
+   Keep `TugonPH` as the database name in the MongoDB URI. Do not share or commit the `.env` file.
 
-4. Configure the frontend API URL in `.env.local`:
+4. Set the frontend API URL in `.env.local`:
 
    ```env
    VITE_API_URL=/api
    VITE_APP_MODE=development
    ```
 
-## Database Setup
+## Database setup
 
-The backend connects only to MongoDB Atlas using `MONGODB_URI` from `server/.env`; there is no local database fallback. In Atlas, allow the machine's public IP under Network Access and create a database user under Database Access.
-If Node.js reports `querySrv ECONNREFUSED` while resolving the Atlas hostname, set `MONGODB_DNS_SERVERS` in `server/.env` to a trusted DNS resolver IP. The example file shows the optional setting.
+The backend uses MongoDB Atlas from `server/.env`. There is no local database fallback in this setup.
 
-### Realtime
+In Atlas, allow your machine's public IP in Network Access and create a database user in Database Access.
 
-The frontend checks for request changes every seven seconds using its existing JWT. Residents receive only their own request changes, while admins receive changes for all requests. The API returns request identifiers and timestamps only; the REST API remains the source of request data.
+If you see `querySrv ECONNREFUSED`, add `MONGODB_DNS_SERVERS` in `server/.env` with a trusted DNS server IP.
 
-## Running the Application
+### Request update polling
+
+The app checks for change in complaints and assistance requests every 7 seconds using the current user token. Residents only receive updates for their own requests. Admins receive updates for all requests.
+
+The polling response includes request IDs, user IDs, and timestamps. When a change is found, the app loads the latest request data from the API. MongoDB and the REST API stay as the source of truth. See [the integration mapping and test plan](./docs/integration-testing.md) for more details.
+
+## Run the application
 
 ### Development
 
-Start the Express API in one terminal:
+Start the API in one terminal:
 
 ```bash
 npm run server
 ```
 
-Then start the Vite frontend in another terminal:
+Then start the frontend in another terminal:
 
 ```bash
 npm run dev
 ```
 
-Open `http://localhost:5173`. The frontend sends API requests through the Vite
-development proxy to `http://127.0.0.1:5000`, so the browser uses the same
-`localhost:5173` origin for authentication. The API stores its database data
-in Atlas.
+Open `http://localhost:5173` in the browser. The frontend sends requests to the Vite dev proxy at `http://127.0.0.1:5000`, so it stays on the same browser origin. The API stores data in Atlas.
 
-### Production Build
+### Production build
 
 ```bash
 npm run build
 ```
 
-## Available Scripts
+## Available scripts
 
-| Command                 | Description                                     |
-| ----------------------- | ----------------------------------------------- |
-| `npm run dev`           | Start the Vite development server on port 5173  |
-| `npm run build`         | Build the app for production                    |
-| `npm run vercel-build`  | Install clean dependencies and build for Vercel |
+| Command | Description |
+| ------- | ----------- |
+| `npm run dev` | Start the Vite development server on port 5173 |
+| `npm run build` | Build the app for production |
+| `npm run vercel-build` | Install clean dependencies and build for Vercel |
 
-## Project Structure
+## Project structure
 
 ```text
 TugonPH/
 |-- docs/
-|   `-- address-verification-setup.md
-|-- public/                          # Static public assets
+|   |-- address-verification-setup.md
+|   `-- integration-testing.md
+|-- public/                          # Public files
 |-- src/
 |   |-- components/
-|   |   |-- auth/                    # Auth, profile, and user management
-|   |   |-- ui/                      # Reusable Radix/shadcn-style UI components
-|   |   |-- admin-panel.tsx          # Admin complaint and assistance management
-|   |   |-- assistance-form.tsx      # Assistance request submission
-|   |   |-- assistance-manager.tsx   # Assistance request state and realtime sync
-|   |   |-- complaint-form.tsx       # Complaint submission
-|   |   |-- complaint-manager.tsx    # Complaint state and realtime sync
-|   |   |-- data-analytics.tsx       # Complaint and assistance analytics
-|   |   |-- heatmap-dashboard.tsx    # Combined heatmap page
-|   |   |-- heatmap-panel.tsx        # Leaflet heatmap rendering
-|   |   |-- map-picker.tsx           # Location picker
+|   |   |-- auth/                    # Login, profile, and user features
+|   |   |-- ui/                      # Shared UI components
+|   |   |-- admin-panel.tsx          # Admin request management
+|   |   |-- assistance-form.tsx      # Assistance request form
+|   |   |-- assistance-manager.tsx   # Assistance request update flow
+|   |   |-- complaint-form.tsx       # Complaint form
+|   |   |-- complaint-manager.tsx    # Complaint update flow
+|   |   |-- data-analytics.tsx       # Reports and charts
+|   |   |-- heatmap-dashboard.tsx    # Map view for reports
+|   |   |-- heatmap-panel.tsx        # Heatmap display
+|   |   |-- map-picker.tsx           # Location selection
 |   |   `-- unified-dashboard.tsx    # Resident dashboard
 |   |-- config/
-|   |   `-- categories.ts            # Complaint and assistance categories
+|   |   `-- categories.ts            # Request categories
 |   |-- services/
-|   |   `-- api.ts                   # Express API integration
+|   |   `-- api.ts                   # API calls
 |   |-- styles/
 |   |   `-- globals.css
 |   |-- App.tsx
@@ -175,14 +204,13 @@ TugonPH/
 |   |-- middleware/
 |   |-- models/
 |   |-- routes/
-|   |-- realtime/
 |   `-- server.js
 |-- package.json
 |-- vite.config.ts
 `-- README.md
 ```
 
-## User Roles
+## User roles
 
 ### Guest
 
@@ -192,47 +220,48 @@ TugonPH/
 
 ### Resident
 
-- Register, verify email with an OTP, and await admin approval.
+- Register and verify email with OTP.
+- Wait for admin approval.
 - Submit and view own complaints.
 - Submit and view own assistance requests.
-- Track request status and admin responses.
-- Receive realtime updates for relevant request activity.
+- Track status and admin responses.
+- Receive updates about relevant request activity.
 - Update profile and settings.
 
 ### Admin
 
 - View all complaints and assistance requests.
-- Update status, priority, and admin notes.
-- Delete eligible complaint and assistance records.
-- Review and verify pending registrations.
-- Access combined analytics and heatmap dashboards.
-- Manage users and account permissions.
+- Update status, priority, and notes.
+- Delete valid records when needed.
+- Review and approve pending registrations.
+- View analytics and heatmap dashboards.
+- Manage users and permissions.
 
 ## Troubleshooting
 
 ### Assistance requests do not submit
 
-- Confirm the backend is running and MongoDB is connected.
-- Verify the request payload includes a title, category, description, address, required photo/document, and valid 11-digit contact number.
-- Check the API response for validation or permission errors.
+- Check if the backend is running and MongoDB is connected.
+- Make sure the request includes a title, category, description, address, proof, and valid 11-digit contact number.
+- Look at the API response for validation or permission errors.
 
-### Requests do not update in real time
+### Requests do not update after polling
 
-- Confirm the backend API is running and MongoDB is connected.
-- Restart the client after a token expiry or logout/login cycle.
-- Check the browser console for polling or authentication errors.
+- Confirm the backend is running.
+- Restart the client after logout or token expiry.
+- Check the browser console for errors.
 
 ### Permission denied errors
 
-- Confirm the user is authenticated and has the correct role.
-- Ensure a resident only accesses their own records.
-- Ensure admin actions are performed with an authenticated admin account.
+- Check if the user is logged in with the right role.
+- Make sure a resident only sees their own requests.
+- Make sure the admin account is authenticated before admin actions.
 
 ### Build errors
 
 - Delete `node_modules` and `package-lock.json`.
-- Run `npm install`.
-- Confirm Node.js is v16 or higher.
+- Run `npm install` again.
+- Confirm that Node.js version is 20 or higher.
 
 ## Customization
 
@@ -254,4 +283,4 @@ This project is private and proprietary.
 
 ---
 
-Current Branch: Active Development
+Current branch: Active development
