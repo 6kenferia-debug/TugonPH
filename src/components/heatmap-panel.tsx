@@ -121,6 +121,8 @@ function getCategoryButtonStyle(category: string): CSSProperties {
 }
 
 const POINTS_PANE = "complaint-points-pane";
+type HeatmapLeafletApi = typeof import("leaflet")["default"];
+let heatmapLeafletApi: HeatmapLeafletApi | null = null;
 
 function toNumber(value: unknown): number | undefined {
   if (typeof value === "number") {
@@ -295,6 +297,19 @@ export function HeatmapPanel({
 
       const points = buildPoints(cat);
       setPointCount(points.length);
+      if (import.meta.env.DEV) {
+        const validCoordinateCount = requests.filter(
+          (request) => getRequestLatLng(request) !== null,
+        ).length;
+        console.debug("[heatmap] requests processed", {
+          requestCount: requests.length,
+          validCoordinateCount,
+          plottedPointCount: points.length,
+          categoryFilter: cat,
+          heatLayerAvailable: typeof L.heatLayer === "function",
+          mapMounted: map === mapRef.current,
+        });
+      }
 
       // Remove old heat layer
       if (heatLayerRef.current) {
@@ -385,9 +400,9 @@ export function HeatmapPanel({
     const initializeMap = async () => {
       try {
         const leafletModule = await import("leaflet");
-        // leaflet.heat extends the global API, so it needs a mutable Leaflet instance.
-        const L = { ...leafletModule.default };
         if (cancelled || mapRef.current) return;
+        // Keep the mutable API stable because the cached heat plugin only registers once.
+        const L = (heatmapLeafletApi ??= { ...leafletModule.default });
         delete (L.Icon.Default.prototype as any)._getIconUrl;
 
         // Ensure plugin extends the same Leaflet instance.
