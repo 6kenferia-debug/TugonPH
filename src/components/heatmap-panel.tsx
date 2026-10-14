@@ -384,7 +384,8 @@ export function HeatmapPanel({
 
     const initializeMap = async () => {
       try {
-        const L = await import("leaflet");
+        const leafletModule = await import("leaflet");
+        const L = { ...leafletModule.default };
         if (cancelled || mapRef.current) return;
         delete (L.Icon.Default.prototype as any)._getIconUrl;
 
