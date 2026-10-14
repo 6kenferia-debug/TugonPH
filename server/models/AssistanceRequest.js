@@ -31,6 +31,10 @@ const assistanceRequestSchema = new mongoose.Schema(
     respondent: { type: String, default: "", trim: true, maxlength: 500 },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null, index: true },
     userName: { type: String, required: true, trim: true, maxlength: 160 },
+    isArchived: { type: Boolean, default: false, index: true },
+    archivedAt: { type: Date, default: null },
+    archivedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    archiveReason: { type: String, default: "", trim: true, maxlength: 500 },
     latitude: { type: Number, min: -90, max: 90, default: null },
     longitude: { type: Number, min: -180, max: 180, default: null },
   },
@@ -50,6 +54,7 @@ const assistanceRequestSchema = new mongoose.Schema(
 
 assistanceRequestSchema.index({ userId: 1, dateSubmitted: -1 });
 assistanceRequestSchema.index({ status: 1, dateSubmitted: -1 });
+assistanceRequestSchema.index({ isArchived: 1, dateSubmitted: -1 });
 assistanceRequestSchema.index({ latitude: 1, longitude: 1 });
 
 module.exports = mongoose.model("AssistanceRequest", assistanceRequestSchema);

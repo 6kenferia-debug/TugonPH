@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
@@ -32,7 +32,8 @@ import {
   Users,
   UserCheck,
   UserX,
-  Trash2,
+  Archive,
+  ArchiveRestore,
   AlertTriangle,
   Eye,
   Clock,
@@ -54,12 +55,18 @@ interface UserProfile {
   createdAt: string;
   updatedAt: string;
   isActive: boolean;
+  role?: "resident" | "admin";
   accountStatus?: string; // 'pending' | 'approved' | 'rejected'
   addressRejectionReason?: string;
   requiredBarangay?: string;
+  isArchived?: boolean;
+  archivedAt?: string | null;
+  archivedBy?: string | null;
+  archiveReason?: string;
+  deactivatedAt?: string | null;
 }
 
-type AdminTab = "pending" | "all";
+type AdminTab = "pending" | "all" | "archived";
 
 const DEFAULT_REQUIRED_BARANGAY =
   "Barangay 407, Zone 42, District IV, Sampaloc, Manila";
@@ -69,6 +76,13 @@ function getRequiredBarangayLabel(value?: string) {
     return DEFAULT_REQUIRED_BARANGAY;
   }
   return value;
+}
+
+function isDeactivatedResident(user: UserProfile) {
+  return user.role !== "admin" && (
+    Boolean(user.deactivatedAt) ||
+    (user.accountStatus === "approved" && user.isActive !== true)
+  );
 }
 
 const approveButtonClass =
@@ -89,22 +103,27 @@ export function UserManagement() {
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
+  const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
+  const [userToArchive, setUserToArchive] = useState<UserProfile | null>(null);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [userToReject, setUserToReject] = useState<UserProfile | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
+  const latestUsersRequest = useRef(0);
 
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    void fetchUsers(activeTab === "archived");
+  }, [activeTab]);
 
   useEffect(() => {
     let source =
       activeTab === "pending"
-        ? users.filter((u) => u.accountStatus === "pending")
-        : users;
+        ? users.filter((u) => !u.isArchived && u.accountStatus === "pending")
+        : activeTab === "archived"
+          ? users.filter((u) => u.isArchived === true || isDeactivatedResident(u))
+          : users.filter((u) =>
+              u.isArchived !== true && !isDeactivatedResident(u),
+            );
 
     if (searchTerm.trim()) {
       source = source.filter(
@@ -118,17 +137,23 @@ export function UserManagement() {
     setFilteredUsers(source);
   }, [users, searchTerm, activeTab]);
 
-  const fetchUsers = async () => {
+  const fetchUsers = async (archived = activeTab === "archived") => {
+    const requestId = ++latestUsersRequest.current;
+    setLoading(true);
     try {
       const { users: fetchedUsers } = await api.get<{ users: UserProfile[] }>(
-        "/admin/users",
+        `/admin/users?archived=${archived}`,
       );
+      if (requestId !== latestUsersRequest.current) return;
       setUsers(fetchedUsers);
     } catch (error) {
+      if (requestId !== latestUsersRequest.current) return;
       console.error("Error fetching users:", error);
       toast.error(getApiErrorMessage(error, "Failed to fetch users"));
     } finally {
-      setLoading(false);
+      if (requestId === latestUsersRequest.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -200,20 +225,32 @@ export function UserManagement() {
     }
   };
 
-  // ── Delete User ───────────────────────────────────────────────────────────────
-  const handleDeleteUser = async () => {
-    if (!userToDelete) return;
+  // ── Archive User ─────────────────────────────────────────────────────────────
+  const handleArchiveUser = async () => {
+    if (!userToArchive) return;
 
     try {
       setActionLoading(true);
-      await api.delete(`/admin/users/${userToDelete.id}`);
+      if (userToArchive.isArchived) {
+        await api.patch(`/admin/users/${userToArchive.id}/unarchive`);
+      } else if (isDeactivatedResident(userToArchive)) {
+        await api.put(`/admin/users/${userToArchive.id}`, { isActive: true });
+      } else {
+        await api.patch(`/admin/users/${userToArchive.id}/archive`);
+      }
       await fetchUsers();
-      toast.success("User deleted successfully");
-      setDeleteDialogOpen(false);
-      setUserToDelete(null);
+      toast.success(
+        userToArchive.isArchived
+          ? "User account restored successfully"
+          : isDeactivatedResident(userToArchive)
+            ? "User account reactivated successfully"
+            : "User account archived successfully",
+      );
+      setArchiveDialogOpen(false);
+      setUserToArchive(null);
     } catch (error) {
-      console.error("Error deleting user:", error);
-      toast.error(getApiErrorMessage(error, "Failed to delete user"));
+      console.error("Error archiving or restoring user:", error);
+      toast.error(getApiErrorMessage(error, "Failed to update user archive status"));
     } finally {
       setActionLoading(false);
     }
@@ -226,6 +263,22 @@ export function UserManagement() {
 
   // ── Helpers ───────────────────────────────────────────────────────────────────
   const getAccountStatusBadge = (user: UserProfile) => {
+    if (user.isArchived) {
+      return (
+        <Badge variant="outline" className="border-slate-400 text-slate-600 bg-slate-50">
+          <Archive className="w-3 h-3 mr-1" />
+          Archived
+        </Badge>
+      );
+    }
+    if (isDeactivatedResident(user)) {
+      return (
+        <Badge variant="outline" className="border-amber-400 text-amber-600 bg-amber-50">
+          <UserX className="w-3 h-3 mr-1" />
+          Deactivated
+        </Badge>
+      );
+    }
     const status = user.accountStatus || "approved";
     if (status === "pending") {
       return (
@@ -293,7 +346,9 @@ export function UserManagement() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-2 sm:pb-3">
-            <CardTitle className="text-sm sm:text-base">Total Users</CardTitle>
+            <CardTitle className="text-sm sm:text-base">
+              {activeTab === "archived" ? "Archived / Deactivated Users" : "Total Users"}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl sm:text-3xl text-foreground">
@@ -363,6 +418,16 @@ export function UserManagement() {
         >
           All Users
         </button>
+        <button
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "archived"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+          onClick={() => setActiveTab("archived")}
+        >
+          Archived / Deactivated Users
+        </button>
       </div>
 
       {/* Pending registration notice */}
@@ -379,7 +444,11 @@ export function UserManagement() {
       <Card>
         <CardHeader>
           <CardTitle>
-            {activeTab === "pending" ? "Pending Approval Requests" : "All Users"}
+            {activeTab === "pending"
+              ? "Pending Approval Requests"
+              : activeTab === "archived"
+                ? "Archived / Deactivated Users"
+                : "All Users"}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -479,7 +548,7 @@ export function UserManagement() {
                                 </Button>
                               </>
                             )}
-                            {user.accountStatus === "approved" && (
+                            {user.accountStatus === "approved" && activeTab !== "archived" && (
                               <Button
                                 variant={user.isActive ? "outline" : "default"}
                                 size="sm"
@@ -499,16 +568,19 @@ export function UserManagement() {
                               </Button>
                             )}
                             <Button
-                              variant="outline"
+                              variant={user.isArchived || isDeactivatedResident(user) ? "outline" : "secondary"}
                               size="sm"
                               onClick={() => {
-                                setUserToDelete(user);
-                                setDeleteDialogOpen(true);
+                                setUserToArchive(user);
+                                setArchiveDialogOpen(true);
                               }}
-                              className="text-destructive hover:text-destructive"
-                              title="Delete"
+                              title={user.isArchived ? "Restore" : isDeactivatedResident(user) ? "Reactivate" : "Archive"}
                             >
-                              <Trash2 className="w-4 h-4" />
+                              {user.isArchived
+                                ? <ArchiveRestore className="w-4 h-4" />
+                                : isDeactivatedResident(user)
+                                  ? <UserCheck className="w-4 h-4" />
+                                  : <Archive className="w-4 h-4" />}
                             </Button>
                           </div>
                         </TableCell>
@@ -596,7 +668,7 @@ export function UserManagement() {
                             </Button>
                           </>
                         )}
-                        {user.accountStatus === "approved" && (
+                        {user.accountStatus === "approved" && activeTab !== "archived" && (
                           <Button
                             variant={user.isActive ? "outline" : "default"}
                             size="sm"
@@ -613,15 +685,21 @@ export function UserManagement() {
                           </Button>
                         )}
                         <Button
-                          variant="outline"
+                          variant={user.isArchived || isDeactivatedResident(user) ? "outline" : "secondary"}
                           size="sm"
                           onClick={() => {
-                            setUserToDelete(user);
-                            setDeleteDialogOpen(true);
+                            setUserToArchive(user);
+                            setArchiveDialogOpen(true);
                           }}
-                          className="text-destructive hover:text-destructive"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          {user.isArchived
+                            ? <ArchiveRestore className="w-4 h-4" />
+                            : isDeactivatedResident(user)
+                              ? <UserCheck className="w-4 h-4" />
+                              : <Archive className="w-4 h-4" />}
+                          <span className="ml-1">
+                            {user.isArchived ? "Restore" : isDeactivatedResident(user) ? "Reactivate" : "Archive"}
+                          </span>
                         </Button>
                       </div>
                     </div>
@@ -832,27 +910,35 @@ export function UserManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Delete Confirmation Dialog ──────────────────────────────────────────── */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      {/* ── Archive Confirmation Dialog ─────────────────────────────────────────── */}
+      <Dialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-destructive flex items-center space-x-2">
+            <DialogTitle className="flex items-center space-x-2">
               <AlertTriangle className="w-5 h-5" />
-              <span>Delete User Account</span>
+              <span>
+                {userToArchive?.isArchived
+                  ? "Restore User Account"
+                  : userToArchive && isDeactivatedResident(userToArchive)
+                    ? "Reactivate User Account"
+                    : "Archive User Account"}
+              </span>
             </DialogTitle>
             <DialogDescription>
-              Are you sure you want to permanently delete this user account?
+              {userToArchive?.isArchived
+                ? "Restore this user account from the archive?"
+                : userToArchive && isDeactivatedResident(userToArchive)
+                  ? "Reactivate this deactivated user account so they can sign in again? Their profile and service records remain unchanged."
+                  : "Archive this user account? The account will be unable to sign in. Its profile and related service records will be retained."}
             </DialogDescription>
           </DialogHeader>
 
-          {userToDelete && (
+          {userToArchive && (
             <Alert>
               <AlertTriangle className="w-4 h-4" />
               <AlertDescription>
-                This will permanently delete the account for{" "}
-                <strong>{userToDelete.name}</strong> ({userToDelete.email}). All
-                their data, complaints, and history will be removed. This action
-                cannot be undone.
+                Account: <strong>{userToArchive.name}</strong> ({userToArchive.email}).
+                No account or service data will be permanently deleted.
               </AlertDescription>
             </Alert>
           )}
@@ -861,21 +947,37 @@ export function UserManagement() {
             <Button
               variant="outline"
               onClick={() => {
-                setDeleteDialogOpen(false);
-                setUserToDelete(null);
+                setArchiveDialogOpen(false);
+                setUserToArchive(null);
               }}
               disabled={actionLoading}
             >
               Cancel
             </Button>
             <Button
-              variant="destructive"
-              onClick={handleDeleteUser}
+              variant={userToArchive?.isArchived ? "default" : "secondary"}
+              onClick={handleArchiveUser}
               disabled={actionLoading}
               className="flex items-center space-x-2"
             >
-              <Trash2 className="w-4 h-4" />
-              <span>{actionLoading ? "Deleting..." : "Delete User"}</span>
+              {userToArchive?.isArchived
+                ? <ArchiveRestore className="w-4 h-4" />
+                : userToArchive && isDeactivatedResident(userToArchive)
+                  ? <UserCheck className="w-4 h-4" />
+                  : <Archive className="w-4 h-4" />}
+              <span>
+                {actionLoading
+                  ? userToArchive?.isArchived
+                    ? "Restoring..."
+                    : userToArchive && isDeactivatedResident(userToArchive)
+                      ? "Reactivating..."
+                      : "Archiving..."
+                  : userToArchive?.isArchived
+                    ? "Restore User"
+                    : userToArchive && isDeactivatedResident(userToArchive)
+                      ? "Reactivate User"
+                      : "Archive User"}
+              </span>
             </Button>
           </DialogFooter>
         </DialogContent>

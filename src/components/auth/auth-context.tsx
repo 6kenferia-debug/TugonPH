@@ -19,6 +19,11 @@ interface User {
   createdAt: string;
   updatedAt: string;
   isActive: boolean;
+  isArchived?: boolean;
+  archivedAt?: string | null;
+  archivedBy?: string | null;
+  archiveReason?: string;
+  deactivatedAt?: string | null;
   accountStatus?: string;
   addressRejectionReason?: string;
   emailVerified?: boolean;
@@ -45,7 +50,11 @@ interface AuthContextType {
   signIn: (
     email: string,
     password: string,
-  ) => Promise<{ error?: string; accountStatus?: string }>;
+  ) => Promise<{ error?: string; errorCode?: string; accountStatus?: string }>;
+  reactivateAccount: (
+    email: string,
+    password: string,
+  ) => Promise<{ error?: string }>;
   requestPasswordRecovery: (email: string) => Promise<{ error?: string; errorCode?: string }>;
   verifyPasswordRecoveryOtp: (
     email: string,
@@ -71,7 +80,7 @@ interface AuthContextType {
   ) => Promise<{ error?: string }>;
   updateEmailNotifications: (enabled: boolean) => Promise<{ error?: string }>;
   uploadProfilePicture: (file: File) => Promise<{ error?: string }>;
-  deleteAccount: () => Promise<{ error?: string; warning?: string }>;
+  deactivateAccount: (currentPassword: string) => Promise<{ error?: string }>;
   refreshProfile: () => Promise<void>;
 }
 
@@ -193,7 +202,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signIn = async (
     email: string,
     password: string,
-  ): Promise<{ error?: string; accountStatus?: string }> => {
+  ): Promise<{ error?: string; errorCode?: string; accountStatus?: string }> => {
     try {
       const result = await api.post<{ token: string; user: User }>(
         "/auth/login",
@@ -216,9 +225,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
         const accountStatus = statusByCode[error.code || ""];
         if (accountStatus) return { error: accountStatus, accountStatus };
-        return { error: error.message };
+        return { error: error.message, errorCode: error.code };
       }
       return { error: "Unable to reach the TugonPH API." };
+    }
+  };
+
+  const reactivateAccount = async (email: string, password: string) => {
+    try {
+      const result = await api.post<{ token: string; user: User }>(
+        "/auth/reactivate",
+        { email, password },
+        { auth: false },
+      );
+      setAuthToken(result.token);
+      localStorage.removeItem("guestMode");
+      setUser(result.user);
+      setPendingUser(null);
+      setIsAdmin(false);
+      setIsGuest(false);
+      return {};
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : "Account reactivation failed.",
+      };
     }
   };
 
@@ -366,13 +396,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const deleteAccount = async () => {
+  const deactivateAccount = async (currentPassword: string) => {
     try {
-      const result = await api.delete<{ message: string; warning?: string }>("/auth/profile");
-      return { warning: result.warning };
+      await api.post<{ message: string }>("/auth/deactivate", { currentPassword });
+      return {};
     } catch (error) {
       return {
-        error: error instanceof Error ? error.message : "Account deletion failed.",
+        error: error instanceof Error ? error.message : "Account deactivation failed.",
       };
     }
   };
@@ -401,6 +431,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     sendOtp,
     verifyEmailOtp,
     signIn,
+    reactivateAccount,
     requestPasswordRecovery,
     verifyPasswordRecoveryOtp,
     resetPassword,
@@ -412,7 +443,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     updateProfile,
     updateEmailNotifications,
     uploadProfilePicture,
-    deleteAccount,
+    deactivateAccount,
     refreshProfile,
   };
 

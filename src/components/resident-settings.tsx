@@ -27,7 +27,7 @@ import {
   Eye,
   EyeOff,
   AlertTriangle,
-  Trash2,
+  Power,
   Check,
   X,
 } from "lucide-react";
@@ -40,7 +40,7 @@ export function ResidentSettings() {
     user,
     updateEmailNotifications,
     changePassword,
-    deleteAccount,
+    deactivateAccount,
     signOut,
   } = useAuth();
   const [notifications, setNotifications] = useState({
@@ -56,8 +56,10 @@ export function ResidentSettings() {
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [confirmNewPasswordError, setConfirmNewPasswordError] = useState<string | null>(null);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deactivateDialogOpen, setDeactivateDialogOpen] = useState(false);
+  const [deactivationPassword, setDeactivationPassword] = useState("");
+  const [deactivationError, setDeactivationError] = useState<string | null>(null);
+  const [deactivatingAccount, setDeactivatingAccount] = useState(false);
   const passwordStrength = evaluatePasswordStrength(newPassword);
 
   useEffect(() => {
@@ -111,22 +113,25 @@ export function ResidentSettings() {
     toast.success("Password changed successfully.");
   };
 
-  const handleDeleteAccount = async () => {
-    setDeletingAccount(true);
-    const { error, warning } = await deleteAccount();
+  const handleDeactivateAccount = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!deactivationPassword) {
+      setDeactivationError("Enter your current password to continue.");
+      return;
+    }
 
+    setDeactivatingAccount(true);
+    setDeactivationError(null);
+    const { error } = await deactivateAccount(deactivationPassword);
     if (error) {
+      setDeactivationError(error);
       toast.error(error);
     } else {
-      if (warning) {
-        toast.warning(warning);
-      } else {
-        toast.success("Account deleted successfully");
-      }
+      toast.success("Your account has been deactivated.");
       await signOut();
     }
-    setDeletingAccount(false);
-    setDeleteDialogOpen(false);
+    setDeactivatingAccount(false);
+    if (!error) setDeactivateDialogOpen(false);
   };
 
   return (
@@ -304,67 +309,91 @@ export function ResidentSettings() {
             <span>Danger Zone</span>
           </CardTitle>
           <CardDescription>
-            Permanently delete your account and all associated data
+            Temporarily disable access to your account without deleting your records
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Alert className="mb-4">
             <AlertTriangle className="w-4 h-4" />
             <AlertDescription>
-              Once you delete your account, there is no going back. All your
-              complaints, data, and account information will be permanently
-              removed.
+              Deactivating your account will prevent you from signing in. Your
+              account and existing complaints and requests will not be deleted
+              and may remain accessible to authorized administrators. Contact
+              the barangay office if you need help restoring access.
             </AlertDescription>
           </Alert>
 
-          <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <Dialog
+            open={deactivateDialogOpen}
+            onOpenChange={(open) => {
+              setDeactivateDialogOpen(open);
+              if (!open) {
+                setDeactivationPassword("");
+                setDeactivationError(null);
+              }
+            }}
+          >
             <DialogTrigger asChild>
               <Button
                 variant="destructive"
                 className="flex items-center space-x-2"
               >
-                <Trash2 className="w-4 h-4" />
-                <span>Delete Account</span>
+                <Power className="w-4 h-4" />
+                <span>Deactivate Account</span>
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle className="text-destructive">
-                  Delete Account
+                  Deactivate account?
                 </DialogTitle>
                 <DialogDescription>
-                  Are you absolutely sure you want to delete your account? This
-                  action cannot be undone and will permanently remove:
+                  You will no longer be able to sign in. Your account and
+                  existing service records will not be deleted. Contact the
+                  barangay office if you need help restoring access.
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="space-y-2 text-sm">
-                <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-                  <li>Your profile and personal information</li>
-                  <li>All your submitted complaints and requests</li>
-                  <li>Your account history and activity</li>
-                  <li>Access to the TugonPH system</li>
-                </ul>
-              </div>
-
-              <DialogFooter className="flex-col sm:flex-row gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setDeleteDialogOpen(false)}
-                  disabled={deletingAccount}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="destructive"
-                  onClick={handleDeleteAccount}
-                  disabled={deletingAccount}
-                  className="flex items-center space-x-2"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  <span>{deletingAccount ? "Deleting..." : "Delete Account"}</span>
-                </Button>
-              </DialogFooter>
+              <form onSubmit={handleDeactivateAccount} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="deactivation-password">Current password</Label>
+                  <Input
+                    id="deactivation-password"
+                    type="password"
+                    autoComplete="current-password"
+                    value={deactivationPassword}
+                    onChange={(event) => {
+                      setDeactivationPassword(event.target.value);
+                      setDeactivationError(null);
+                    }}
+                    required
+                  />
+                  {deactivationError && (
+                    <p className="text-sm text-destructive" role="alert">
+                      {deactivationError}
+                    </p>
+                  )}
+                </div>
+                <DialogFooter className="flex-col sm:flex-row gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setDeactivateDialogOpen(false)}
+                    disabled={deactivatingAccount}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="destructive"
+                    disabled={deactivatingAccount}
+                    className="flex items-center space-x-2"
+                  >
+                    <Power className="w-4 h-4" />
+                    <span>{deactivatingAccount ? "Deactivating..." : "Deactivate Account"}</span>
+                  </Button>
+                </DialogFooter>
+              </form>
             </DialogContent>
           </Dialog>
         </CardContent>

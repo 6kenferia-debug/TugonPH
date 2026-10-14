@@ -12,6 +12,14 @@ import {
 import { Separator } from "../ui/separator";
 import { Alert, AlertDescription } from "../ui/alert";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../ui/dialog";
+import {
   Mail,
   Lock,
   Eye,
@@ -38,8 +46,10 @@ export function LoginForm({ onSwitchToSignup }: LoginFormProps) {
     "pending" | "rejected" | "unverified" | null
   >(null);
   const [showPasswordRecovery, setShowPasswordRecovery] = useState(false);
+  const [reactivationDialogOpen, setReactivationDialogOpen] = useState(false);
+  const [reactivatingAccount, setReactivatingAccount] = useState(false);
 
-  const { signIn, loginAsGuest } = useAuth();
+  const { signIn, reactivateAccount, loginAsGuest } = useAuth();
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,7 +65,9 @@ export function LoginForm({ onSwitchToSignup }: LoginFormProps) {
     const result = await signIn(email, password);
 
     if (result.error) {
-      if (result.error === "pending") {
+      if (result.errorCode === "ACCOUNT_DEACTIVATED") {
+        setReactivationDialogOpen(true);
+      } else if (result.error === "pending") {
         // Account awaiting admin approval
         setAccountStatus("pending");
         setAuthError("pending");
@@ -108,11 +120,30 @@ export function LoginForm({ onSwitchToSignup }: LoginFormProps) {
     setLoading(false);
   };
 
+  const handleReactivateAccount = async () => {
+    setReactivatingAccount(true);
+    const result = await reactivateAccount(email, password);
+    setReactivatingAccount(false);
+    if (result.error) {
+      toast.error(result.error);
+      return;
+    }
+    setReactivationDialogOpen(false);
+    setPassword("");
+    toast.success("Your account has been reactivated. Welcome back to TugonPH!");
+  };
+
+  const handleCancelReactivation = () => {
+    setReactivationDialogOpen(false);
+    setPassword("");
+  };
+
   if (showPasswordRecovery) {
     return <PasswordRecoveryForm onBackToLogin={() => setShowPasswordRecovery(false)} />;
   }
 
   return (
+    <>
     <Card className="w-full max-w-md mx-auto shadow-lg shadow-[#35408E]/15">
       <CardHeader className="text-center">
         <CardTitle className="text-2xl">{"Welcome Back"}</CardTitle>
@@ -277,5 +308,40 @@ export function LoginForm({ onSwitchToSignup }: LoginFormProps) {
         </div>
       </CardContent>
     </Card>
+    <Dialog
+      open={reactivationDialogOpen}
+      onOpenChange={(open) => {
+        if (!open && !reactivatingAccount) handleCancelReactivation();
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Reactivate your account?</DialogTitle>
+          <DialogDescription>
+            This account is currently deactivated. Continuing will reactivate
+            your account and sign you in. If you cancel, the account will
+            remain deactivated.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleCancelReactivation}
+            disabled={reactivatingAccount}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            onClick={() => void handleReactivateAccount()}
+            disabled={reactivatingAccount}
+          >
+            {reactivatingAccount ? "Reactivating..." : "Continue and Reactivate"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

@@ -8,7 +8,7 @@
 | MongoDB, after a request change | `userId` | React app through authenticated REST polling | `userId` | String or null | The polling API converts a non-null user ID to a string and preserves null. Residents are scoped to their own requests by the API; admins can poll all requests. |
 | MongoDB, after a request change | `updatedAt` | React app through authenticated REST polling | `updatedAt` | ISO 8601 string | The polling API returns the timestamp. The client compares it with its previous snapshot to detect updates. On a detected change, the app fetches the request data from the REST API. |
 
-The app polls the complaints and assistance-request endpoints every seven seconds with the user's JWT. Polling responses identify changes; they do not carry full request records or trigger Socket.IO events. There are no Socket.IO rooms or direct server pushes. MongoDB and REST remain the source of truth.
+The app polls the complaints and assistance-request endpoints every minute with the user's JWT. Polling responses identify changes; they do not carry full request records or trigger Socket.IO events. There are no Socket.IO rooms or direct server pushes. MongoDB and REST remain the source of truth.
 
 ## Integration scenario
 
@@ -28,7 +28,7 @@ Check that the React app, Express API, and MongoDB exchange and save request dat
 
 | Test ID | Integration flow | Test scenario | Expected result | Actual result | Status |
 | --- | --- | --- | --- | --- | --- |
-| I-10 | Frontend -> API -> Database -> polling API -> Frontend | Polling-based request update checking | Updated information becomes visible without a page reload after the polling cycle detects a change. | The app polls the authenticated REST endpoints every seven seconds; changed request data is reloaded from the REST API instead of using Socket.IO or WebSockets. End-to-end verification is still needed. | PARTIAL |
+| I-10 | Frontend -> API -> Database -> polling API -> Frontend | Polling-based request update checking | Updated information becomes visible without a page reload after the polling cycle detects a change. | The app polls the authenticated REST endpoints every minute; changed request data is reloaded from the REST API instead of using Socket.IO or WebSockets. End-to-end verification is still needed. | PARTIAL |
 
 ## Password recovery and change testing
 

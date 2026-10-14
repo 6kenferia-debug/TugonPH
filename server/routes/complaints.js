@@ -13,6 +13,7 @@ router.get("/:id", authenticate, controller.asyncRoute(controller.getById));
 router.get("/:id/history", authenticate, controller.asyncRoute(controller.getHistory));
 router.post("/:id/resolution-proof", authenticate, authorize("admin"), resolutionProofUpload, storageRoute(saveComplaintProof));
 router.put("/:id", authenticate, authorize("admin"), controller.asyncRoute(controller.update));
-router.delete("/:id", authenticate, authorize("admin"), controller.asyncRoute(controller.remove));
+router.patch("/:id/archive", authenticate, authorize("admin"), controller.asyncRoute(controller.archive));
+router.patch("/:id/unarchive", authenticate, authorize("admin"), controller.asyncRoute(controller.unarchive));
 
 module.exports = router;

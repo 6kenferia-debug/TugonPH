@@ -7,9 +7,13 @@ const router = express.Router();
 
 router.get("/complaints", authenticate, async (req, res, next) => {
   try {
-    const query = req.user.role === "admin" ? {} : { userId: req.user.id };
+    const query = {
+      ...(req.user.role === "admin"
+        ? {}
+        : { userId: req.user.id, isArchived: { $ne: true } }),
+    };
     const complaints = await Complaint.find(query)
-      .select("_id userId updatedAt")
+      .select("_id userId updatedAt isArchived")
       .lean();
     return res.json(complaints.map((complaint) => ({
       id: String(complaint._id),
@@ -23,9 +27,13 @@ router.get("/complaints", authenticate, async (req, res, next) => {
 
 router.get("/assistance-requests", authenticate, async (req, res, next) => {
   try {
-    const query = req.user.role === "admin" ? {} : { userId: req.user.id };
+    const query = {
+      ...(req.user.role === "admin"
+        ? {}
+        : { userId: req.user.id, isArchived: { $ne: true } }),
+    };
     const requests = await AssistanceRequest.find(query)
-      .select("_id userId updatedAt")
+      .select("_id userId updatedAt isArchived")
       .lean();
     return res.json(requests.map((request) => ({
       id: String(request._id),

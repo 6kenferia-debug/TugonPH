@@ -18,6 +18,13 @@ const userSchema = new mongoose.Schema(
     profilePictureUrl: { type: String, default: null },
     emailNotifications: { type: Boolean, default: true },
     isActive: { type: Boolean, default: false, index: true },
+    selfDeactivated: { type: Boolean, default: false, select: false },
+    isArchived: { type: Boolean, default: false, index: true },
+    archivedAt: { type: Date, default: null },
+    archivedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    archiveReason: { type: String, default: "", trim: true, maxlength: 500 },
+    wasActiveBeforeArchive: { type: Boolean, default: false, select: false },
+    deactivatedAt: { type: Date, default: null },
     accountStatus: {
       type: String,
       enum: ["pending", "approved", "rejected"],
@@ -65,6 +72,7 @@ const userSchema = new mongoose.Schema(
         delete value.passwordRecoveryOtpResendCount;
         delete value.passwordRecoveryTokenHash;
         delete value.passwordRecoveryTokenExpiresAt;
+        delete value.wasActiveBeforeArchive;
         return value;
       },
     },
@@ -72,5 +80,6 @@ const userSchema = new mongoose.Schema(
 );
 
 userSchema.index({ accountStatus: 1, createdAt: -1 });
+userSchema.index({ isArchived: 1, createdAt: -1 });
 
 module.exports = mongoose.model("User", userSchema);

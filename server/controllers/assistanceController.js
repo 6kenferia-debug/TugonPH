@@ -2,9 +2,10 @@ const mongoose = require("mongoose");
 const AssistanceRequest = require("../models/AssistanceRequest");
 const User = require("../models/User");
 const { asyncRoute } = require("./complaintController");
-const { removePublicFileUrl } = require("../services/storage-service");
 const { sendStatusUpdateEmail } = require("../services/email");
 const { createRequestHistoryEntry, createRequestHistoryEntries, getRequestHistory } = require("../services/requestHistory");
+const { restoreActiveRequests } = require("../services/restore-active-requests");
+const { archivedResidentFilter } = require("../services/archived-resident-filter");
 
 async function recordAssistanceHistory({ user, existingRequest, nextRequest, updates }) {
   const entries = [];
@@ -123,9 +124,36 @@ function pagination(req) {
 }
 
 async function list(req, res) {
-  const filter = req.user.role === "admin" ? {} : { userId: req.user._id };
+  const archived = req.query.archived === "true";
+  if (req.query.archived !== undefined && !["true", "false"].includes(req.query.archived)) {
+    return res.status(400).json({ error: "archived must be true or false.", code: "INVALID_ARCHIVE_FILTER" });
+  }
+  if (archived && req.user.role !== "admin") {
+    return res.status(403).json({ error: "Only admins can view archived requests." });
+  }
+  await restoreActiveRequests(AssistanceRequest, "assistance", "Assistance request");
+  const archivedResidentIds = req.user.role === "admin"
+    ? await User.distinct("_id", archivedResidentFilter())
+    : [];
+  const filter = {
+    ...(req.user.role === "admin" ? {} : { userId: req.user._id }),
+  };
+  if (archived) {
+    filter.$or = [
+      { isArchived: true, status: { $in: ["resolved", "rejected"] } },
+      { userId: { $in: archivedResidentIds } },
+    ];
+  } else {
+    filter.isArchived = { $ne: true };
+    if (req.user.role === "admin") filter.userId = { $nin: archivedResidentIds };
+  }
   const { limit, skip } = pagination(req);
-  const assistanceRequests = await AssistanceRequest.find(filter).sort({ dateSubmitted: -1 }).skip(skip).limit(limit);
+  const records = await AssistanceRequest.find(filter).sort({ dateSubmitted: -1 }).skip(skip).limit(limit);
+  const archivedResidentIdSet = new Set(archivedResidentIds.map(String));
+  const assistanceRequests = records.map((record) => ({
+    ...record.toJSON(),
+    ownerArchived: archivedResidentIdSet.has(String(record.userId)),
+  }));
   return res.json({ assistanceRequests });
 }
 
@@ -135,6 +163,7 @@ async function getById(req, res) {
   }
   const assistanceRequest = await AssistanceRequest.findById(req.params.id);
   if (!assistanceRequest) return res.status(404).json({ error: "Assistance request not found." });
+  if (assistanceRequest.isArchived && req.user.role !== "admin") return res.status(404).json({ error: "Assistance request not found." });
   if (req.user.role !== "admin" && String(assistanceRequest.userId) !== String(req.user._id)) {
     return res.status(403).json({ error: "You cannot access this assistance request." });
   }
@@ -148,6 +177,7 @@ async function getHistory(req, res) {
 
   const assistanceRequest = await AssistanceRequest.findById(req.params.id).select("_id userId");
   if (!assistanceRequest) return res.status(404).json({ error: "Assistance request not found." });
+  if (assistanceRequest.isArchived && req.user.role !== "admin") return res.status(404).json({ error: "Assistance request not found." });
   if (req.user.role !== "admin" && String(assistanceRequest.userId) !== String(req.user._id)) {
     return res.status(403).json({ error: "You cannot access this assistance request." });
   }
@@ -210,6 +240,7 @@ async function update(req, res) {
 
   const existingRequest = await AssistanceRequest.findById(req.params.id);
   if (!existingRequest) return res.status(404).json({ error: "Assistance request not found." });
+  if (existingRequest.isArchived) return res.status(409).json({ error: "Restore this request before editing it.", code: "RECORD_ARCHIVED" });
 
   const previousRequestSnapshot = {
     status: existingRequest.status,
@@ -256,16 +287,63 @@ async function update(req, res) {
   return res.json({ assistanceRequest });
 }
 
-async function remove(req, res) {
+async function archive(req, res) {
   if (!mongoose.isValidObjectId(req.params.id)) {
     return res.status(400).json({ error: "Invalid record identifier.", code: "INVALID_ID" });
   }
-  const assistanceRequest = await AssistanceRequest.findByIdAndDelete(req.params.id);
+  const assistanceRequest = await AssistanceRequest.findById(req.params.id);
   if (!assistanceRequest) return res.status(404).json({ error: "Assistance request not found." });
-  if (assistanceRequest.resolutionProofImage) {
-    await removePublicFileUrl(assistanceRequest.resolutionProofImage).catch(() => false);
+  if (assistanceRequest.isArchived) return res.status(409).json({ error: "Restore this request before changing its status.", code: "RECORD_ARCHIVED" });
+  if (!["resolved", "rejected"].includes(assistanceRequest.status)) {
+    return res.status(409).json({
+      error: "Only resolved or rejected assistance requests can be archived.",
+      code: "REQUEST_NOT_ARCHIVABLE",
+    });
   }
-  return res.json({ message: "Assistance request deleted successfully." });
+  if (!assistanceRequest.isArchived) {
+    const reason = typeof req.body.reason === "string" ? req.body.reason.trim() : "";
+    if (reason.length > 500) return res.status(400).json({ error: "Archive reason must be 500 characters or fewer." });
+    assistanceRequest.isArchived = true;
+    assistanceRequest.archivedAt = new Date();
+    assistanceRequest.archivedBy = req.user._id;
+    assistanceRequest.archiveReason = reason;
+    await assistanceRequest.save();
+    await createRequestHistoryEntry({
+      requestType: "assistance",
+      requestId: assistanceRequest._id,
+      action: "Request archived",
+      previousValue: "active",
+      newValue: "archived",
+      details: reason || "Request archived by an administrator.",
+      user: req.user,
+    });
+  }
+  return res.json({ assistanceRequest, message: "Assistance request archived successfully." });
 }
 
-module.exports = { asyncRoute, list, getById, getHistory, create, update, remove };
+async function unarchive(req, res) {
+  if (!mongoose.isValidObjectId(req.params.id)) {
+    return res.status(400).json({ error: "Invalid record identifier.", code: "INVALID_ID" });
+  }
+  const assistanceRequest = await AssistanceRequest.findById(req.params.id);
+  if (!assistanceRequest) return res.status(404).json({ error: "Assistance request not found." });
+  if (assistanceRequest.isArchived) {
+    assistanceRequest.isArchived = false;
+    assistanceRequest.archivedAt = null;
+    assistanceRequest.archivedBy = null;
+    assistanceRequest.archiveReason = "";
+    await assistanceRequest.save();
+    await createRequestHistoryEntry({
+      requestType: "assistance",
+      requestId: assistanceRequest._id,
+      action: "Request restored",
+      previousValue: "archived",
+      newValue: "active",
+      details: "Request restored from the archive.",
+      user: req.user,
+    });
+  }
+  return res.json({ assistanceRequest, message: "Assistance request restored successfully." });
+}
+
+module.exports = { asyncRoute, list, getById, getHistory, create, update, archive, unarchive };

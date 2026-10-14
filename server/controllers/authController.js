@@ -1,13 +1,9 @@
 const crypto = require("node:crypto");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const Complaint = require("../models/Complaint");
-const AssistanceRequest = require("../models/AssistanceRequest");
-const RequestHistory = require("../models/RequestHistory");
 const User = require("../models/User");
 const { sendVerificationCode, sendPasswordRecoveryCode } = require("../services/email");
 const { validatePassword } = require("../services/password-policy");
-const { removeOwnedPublicFileUrl } = require("../services/storage-service");
 
 const OTP_LENGTH = 6;
 const OTP_EXPIRATION_MINUTES = 10;
@@ -38,7 +34,7 @@ async function login(req, res, next) {
       return res.status(400).json({ error: "Email and password are required.", code: "MISSING_CREDENTIALS" });
     }
 
-    const user = await User.findOne({ email }).select("+passwordHash");
+    const user = await User.findOne({ email }).select("+passwordHash +selfDeactivated");
     const passwordMatches = user && await bcrypt.compare(password, user.passwordHash);
     if (!passwordMatches) {
       return res.status(401).json({ error: "Invalid email or password.", code: "INVALID_CREDENTIALS" });
@@ -53,11 +49,53 @@ async function login(req, res, next) {
       return res.status(403).json({ error: "Email address has not been verified.", code: "EMAIL_UNVERIFIED" });
     }
     if (!user.isActive) {
-      return res.status(403).json({ error: "Account is inactive.", code: "ACCOUNT_INACTIVE" });
+      if (user.role === "resident" && user.selfDeactivated && !user.isArchived) {
+        return res.status(403).json({
+          error: "Your account is deactivated. Continue to reactivate it and sign in.",
+          code: "ACCOUNT_DEACTIVATED",
+        });
+      }
+      return res.status(403).json({ error: "Account is deactivated, contact barangay personnel to reactivate.", code: "ACCOUNT_INACTIVE" });
     }
 
     const token = jwt.sign({ sub: user.id }, process.env.JWT_SECRET, { expiresIn: "7d" });
     return res.json({ token, user: user.toJSON() });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function reactivateAccount(req, res, next) {
+  try {
+    const email = normalizeEmail(req.body.email);
+    const password = typeof req.body.password === "string" ? req.body.password : "";
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password are required.", code: "MISSING_CREDENTIALS" });
+    }
+
+    const user = await User.findOne({ email }).select("+passwordHash +selfDeactivated");
+    if (!user || !await bcrypt.compare(password, user.passwordHash)) {
+      return res.status(401).json({ error: "Invalid email or password.", code: "INVALID_CREDENTIALS" });
+    }
+    if (
+      user.role !== "resident" ||
+      user.isArchived ||
+      !user.selfDeactivated ||
+      user.accountStatus !== "approved" ||
+      !user.emailVerified
+    ) {
+      return res.status(403).json({
+        error: "This account cannot be reactivated through sign-in. Contact barangay personnel for assistance.",
+        code: "ACCOUNT_CANNOT_BE_REACTIVATED",
+      });
+    }
+
+    user.isActive = true;
+    user.selfDeactivated = false;
+    user.deactivatedAt = null;
+    await user.save();
+    const token = jwt.sign({ sub: user.id }, process.env.JWT_SECRET, { expiresIn: "7d" });
+    return res.json({ token, user: user.toJSON(), message: "Account reactivated successfully." });
   } catch (error) {
     return next(error);
   }
@@ -115,110 +153,46 @@ async function updateNotificationSettings(req, res, next) {
   }
 }
 
-async function deleteCurrentUserAccount(req, res, next) {
-  const session = await User.startSession();
-  let filesToRemove = [];
-
+async function deactivateCurrentUserAccount(req, res, next) {
   try {
-    await session.withTransaction(async () => {
-      const user = await User.findById(req.user._id).session(session);
-      if (!user) {
-        const error = new Error("Authenticated account not found.");
-        error.status = 404;
-        error.code = "ACCOUNT_NOT_FOUND";
-        throw error;
-      }
-
-      filesToRemove = [];
-      if (user.profilePictureUrl) {
-        filesToRemove.push({
-          fileUrl: user.profilePictureUrl,
-          kind: "profile",
-          ownerId: user.id,
-        });
-      }
-
-      const complaints = await Complaint.find({ userId: user._id })
-        .select("_id resolutionProofImage")
-        .session(session)
-        .lean();
-      const assistanceRequests = await AssistanceRequest.find({ userId: user._id })
-        .select("_id resolutionProofImage")
-        .session(session)
-        .lean();
-
-      for (const complaint of complaints) {
-        if (complaint.resolutionProofImage) {
-          filesToRemove.push({
-            fileUrl: complaint.resolutionProofImage,
-            kind: "complaint-proof",
-            ownerId: String(complaint._id),
-          });
-        }
-      }
-      for (const request of assistanceRequests) {
-        if (request.resolutionProofImage) {
-          filesToRemove.push({
-            fileUrl: request.resolutionProofImage,
-            kind: "assistance-proof",
-            ownerId: String(request._id),
-          });
-        }
-      }
-
-      const complaintIds = complaints.map(({ _id }) => _id);
-      const assistanceRequestIds = assistanceRequests.map(({ _id }) => _id);
-
-      if (complaintIds.length) {
-        await Complaint.deleteMany({
-          _id: { $in: complaintIds },
-          userId: user._id,
-        }).session(session);
-        await RequestHistory.deleteMany({
-          requestType: "complaint",
-          requestId: { $in: complaintIds },
-        }).session(session);
-      }
-      if (assistanceRequestIds.length) {
-        await AssistanceRequest.deleteMany({
-          _id: { $in: assistanceRequestIds },
-          userId: user._id,
-        }).session(session);
-        await RequestHistory.deleteMany({
-          requestType: "assistance",
-          requestId: { $in: assistanceRequestIds },
-        }).session(session);
-      }
-
-      const deletion = await User.deleteOne({ _id: user._id }).session(session);
-      if (!deletion.deletedCount) {
-        const error = new Error("Authenticated account not found.");
-        error.status = 404;
-        error.code = "ACCOUNT_NOT_FOUND";
-        throw error;
-      }
-    });
-
-    const cleanupFailures = [];
-    for (const file of filesToRemove) {
-      try {
-        await removeOwnedPublicFileUrl(file.fileUrl, file.kind, file.ownerId);
-      } catch (error) {
-        console.error(`Failed to remove account-owned ${file.kind} file:`, error);
-        cleanupFailures.push(file.kind);
-      }
+    if (req.user.role !== "resident") {
+      return res.status(403).json({
+        error: "Only resident accounts can be deactivated from account settings.",
+        code: "RESIDENT_ACCOUNT_REQUIRED",
+      });
     }
 
-    return res.json({
-      message: "Account deleted successfully.",
-      ...(cleanupFailures.length
-        ? { warning: "The account was deleted, but some uploaded files could not be removed." }
-        : {}),
-    });
+    const currentPassword = typeof req.body.currentPassword === "string"
+      ? req.body.currentPassword
+      : "";
+    if (!currentPassword) {
+      return res.status(400).json({
+        error: "Your current password is required.",
+        code: "CURRENT_PASSWORD_REQUIRED",
+      });
+    }
+
+    const user = await User.findById(req.user._id).select("+passwordHash");
+    if (!user) {
+      return res.status(404).json({
+        error: "Authenticated account not found.",
+        code: "ACCOUNT_NOT_FOUND",
+      });
+    }
+    if (!await bcrypt.compare(currentPassword, user.passwordHash)) {
+      return res.status(400).json({
+        error: "Your current password is incorrect.",
+        code: "CURRENT_PASSWORD_INCORRECT",
+      });
+    }
+
+    user.isActive = false;
+    user.selfDeactivated = true;
+    user.deactivatedAt = new Date();
+    await user.save();
+    return res.json({ message: "Account deactivated successfully." });
   } catch (error) {
     return next(error);
-  } finally {
-    await session.endSession();
   }
 }
 
@@ -654,10 +628,11 @@ async function changePassword(req, res, next) {
 
 module.exports = {
   login,
+  reactivateAccount,
   getCurrentUser,
   updateProfile,
   updateNotificationSettings,
-  deleteCurrentUserAccount,
+  deactivateCurrentUserAccount,
   register,
   resendVerification,
   verifyEmail,

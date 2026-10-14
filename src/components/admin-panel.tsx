@@ -66,7 +66,8 @@ import {
   Settings,
   Map,
   RefreshCw,
-  Trash2,
+  Archive,
+  ArchiveRestore,
   Upload,
   Save,
 } from "lucide-react";
@@ -98,18 +99,27 @@ interface Complaint {
   latitude?: number;
   longitude?: number;
   coordinates?: { lat: number; lng: number };
+  isArchived?: boolean;
+  ownerArchived?: boolean;
+  archivedAt?: string | null;
+  archivedBy?: string | null;
+  archiveReason?: string;
 }
 
 interface AdminPanelProps {
   complaints: Complaint[];
   assistanceRequests?: AssistanceRequest[];
   onUpdateComplaint: (id: string, updates: Partial<Complaint>) => void;
-  onDeleteComplaint: (id: string) => Promise<{ error?: string }>;
+  onArchiveComplaint: (id: string) => Promise<{ error?: string }>;
+  onUnarchiveComplaint: (id: string) => Promise<{ error?: string }>;
   onUpdateAssistance?: (
     id: string,
     updates: Partial<AssistanceRequest>,
   ) => Promise<{ error?: string }>;
-  onDeleteAssistance?: (id: string) => Promise<{ error?: string }>;
+  onArchiveAssistance?: (id: string) => Promise<{ error?: string }>;
+  onUnarchiveAssistance?: (id: string) => Promise<{ error?: string }>;
+  archivedView: boolean;
+  onToggleArchiveView: () => void;
   onUploadComplaintResolutionProof?: (
     id: string,
     file: File,
@@ -127,9 +137,13 @@ export function AdminPanel({
   complaints,
   assistanceRequests = [],
   onUpdateComplaint,
-  onDeleteComplaint,
+  onArchiveComplaint,
+  onUnarchiveComplaint,
   onUpdateAssistance,
-  onDeleteAssistance,
+  onArchiveAssistance,
+  onUnarchiveAssistance,
+  archivedView,
+  onToggleArchiveView,
   onUploadComplaintResolutionProof,
   onUploadAssistanceResolutionProof,
   onRefresh,
@@ -149,13 +163,14 @@ export function AdminPanel({
   const [selectedComplaint, setSelectedComplaint] = useState<Complaint | null>(
     null,
   );
+  const [loadingComplaintDetailsId, setLoadingComplaintDetailsId] = useState<string | null>(null);
   const [adminNotes, setAdminNotes] = useState("");
   const proofInputRef = useRef<HTMLInputElement | null>(null);
   const [proofUploadingId, setProofUploadingId] = useState<string | null>(null);
   const [selectedPriority, setSelectedPriority] = useState<
     "low" | "medium" | "high"
   >("medium");
-  const [deleteTarget, setDeleteTarget] = useState<Complaint | null>(null);
+  const [archiveTarget, setArchiveTarget] = useState<Complaint | null>(null);
   const availableCategories =
     typeFilter === "complaint" ? COMPLAINT_CATEGORIES : ASSISTANCE_CATEGORIES;
 
@@ -211,7 +226,29 @@ export function AdminPanel({
     }
   };
 
+  const openComplaint = (complaint: Complaint) => {
+    setSelectedComplaint(complaint);
+    setAdminNotes(complaint.adminNotes || "");
+    setSelectedPriority(complaint.priority);
+    if (complaint.photo !== undefined && complaint.resolutionProofImage !== undefined) {
+      return;
+    }
+
+    setLoadingComplaintDetailsId(complaint.id);
+    void api.get<{ complaint: Complaint }>(`/complaints/${encodeURIComponent(complaint.id)}`)
+      .then(({ complaint: details }) => {
+        setSelectedComplaint((current) => current?.id === details.id ? details : current);
+      })
+      .catch((error) => {
+        toast.error(error instanceof Error ? error.message : "Failed to load complaint details");
+      })
+      .finally(() => {
+        setLoadingComplaintDetailsId((current) => current === complaint.id ? null : current);
+      });
+  };
+
   const baseComplaints = complaints.filter((complaint) => {
+    if (Boolean(complaint.isArchived || complaint.ownerArchived) !== archivedView) return false;
     // Enhanced search - search across all text fields including complainant name
     const searchLower = searchTerm.toLowerCase();
     const matchesSearch =
@@ -260,6 +297,7 @@ export function AdminPanel({
   );
 
   const baseAssistance = assistanceRequests.filter((req) => {
+    if (Boolean(req.isArchived || req.ownerArchived) !== archivedView) return false;
     const searchLower = searchTerm.toLowerCase();
     const matchesSearch =
       !searchTerm ||
@@ -302,6 +340,7 @@ export function AdminPanel({
   );
 
   const handleStatusUpdate = (id: string, newStatus: string) => {
+    if (archivedView) return;
     if (typeFilter === "assistance") {
       void onUpdateAssistance?.(id, { status: newStatus as any });
     } else {
@@ -316,6 +355,7 @@ export function AdminPanel({
     id: string,
     newPriority: "low" | "medium" | "high",
   ) => {
+    if (archivedView) return;
     if (typeFilter === "assistance") {
       void onUpdateAssistance?.(id, { priority: newPriority });
     } else {
@@ -418,23 +458,29 @@ export function AdminPanel({
     }
   };
 
-  const handleConfirmDelete = async () => {
-    if (!deleteTarget) return;
+  const handleConfirmArchive = async () => {
+    if (!archiveTarget) return;
+    if (!archivedView && !["resolved", "rejected"].includes(archiveTarget.status)) {
+      toast.error("Only resolved or rejected requests can be archived.");
+      return;
+    }
 
     if (typeFilter === "assistance") {
-      const { error } = await onDeleteAssistance?.(deleteTarget.id as string);
+      const action = archivedView ? onUnarchiveAssistance : onArchiveAssistance;
+      const { error } = await action?.(archiveTarget.id) ?? {};
       if (error) return;
     } else {
-      const { error } = await onDeleteComplaint(deleteTarget.id);
+      const action = archivedView ? onUnarchiveComplaint : onArchiveComplaint;
+      const { error } = await action(archiveTarget.id);
       if (error) return;
     }
 
-    if (selectedComplaint?.id === deleteTarget.id) {
+    if (selectedComplaint?.id === archiveTarget.id) {
       setSelectedComplaint(null);
       setAdminNotes("");
     }
 
-    setDeleteTarget(null);
+    setArchiveTarget(null);
   };
 
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -505,7 +551,7 @@ export function AdminPanel({
               variant="outline"
               size="sm"
               className="h-9 rounded-md border-primary/30 px-3 text-primary hover:bg-primary/10"
-              disabled={!selectedComplaint || isProofUploading}
+              disabled={!selectedComplaint || isProofUploading || archivedView}
               onClick={() => proofInputRef.current?.click()}
             >
               <Upload
@@ -521,6 +567,7 @@ export function AdminPanel({
           onChange={(e) => setAdminNotes(e.target.value)}
           placeholder="Add notes about this request..."
           rows={3}
+          disabled={archivedView}
         />
 
         {selectedComplaint?.resolutionProofImage && (
@@ -540,6 +587,7 @@ export function AdminPanel({
           <DialogClose asChild>
             <Button
               onClick={handleSaveNotes}
+              disabled={archivedView}
               size="sm"
               className="h-9 rounded-md px-4 shadow-sm transition-colors hover:bg-primary/90"
             >
@@ -547,20 +595,22 @@ export function AdminPanel({
               Save Notes
             </Button>
           </DialogClose>
-          <DialogClose asChild>
-            <Button
-              variant="destructive"
-              size="sm"
-              className="h-9 rounded-md px-4 shadow-sm transition-colors hover:bg-destructive/90   "
-              onClick={() => {
-                if (!selectedComplaint) return;
-                setDeleteTarget(selectedComplaint);
-              }}
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete Request
-            </Button>
-          </DialogClose>
+          {((archivedView && selectedComplaint?.isArchived) || (!archivedView && ["resolved", "rejected"].includes(selectedComplaint?.status ?? ""))) && (
+            <DialogClose asChild>
+              <Button
+                variant={archivedView ? "outline" : "secondary"}
+                size="sm"
+                className="h-9 rounded-md px-4 shadow-sm transition-colors hover:bg-destructive/90"
+                onClick={() => {
+                  if (!selectedComplaint) return;
+                  setArchiveTarget(selectedComplaint);
+                }}
+              >
+                {archivedView ? <ArchiveRestore className="mr-2 h-4 w-4" /> : <Archive className="mr-2 h-4 w-4" />}
+                {archivedView ? "Restore Request" : "Archive Request"}
+              </Button>
+            </DialogClose>
+          )}
         </div>
       </div>
     );
@@ -667,6 +717,23 @@ export function AdminPanel({
               className={`w-4 h-4 mr-2 ${refreshing ? "animate-spin" : ""}`}
             />
             Refresh
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={() => {
+              setSelectedComplaint(null);
+              onToggleArchiveView();
+            }}
+          >
+            {archivedView ? (
+              <ArchiveRestore className="w-4 h-4 mr-2" />
+            ) : (
+              <Archive className="w-4 h-4 mr-2" />
+            )}
+            {archivedView ? "View Active Records" : "View Archive"}
           </Button>
         </div>
       </div>
@@ -1065,11 +1132,7 @@ export function AdminPanel({
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => {
-                                  setSelectedComplaint(complaint);
-                                  setAdminNotes(complaint.adminNotes || "");
-                                  setSelectedPriority(complaint.priority);
-                                }}
+                                onClick={() => openComplaint(complaint)}
                               >
                                 Manage
                               </Button>
@@ -1162,6 +1225,9 @@ export function AdminPanel({
                                         />
                                       </div>
                                     </div>
+                                  )}
+                                  {loadingComplaintDetailsId === selectedComplaint.id && (
+                                    <p className="text-sm text-muted-foreground">Loading complaint evidence...</p>
                                   )}
 
                                   <div className="space-y-2">
@@ -1340,16 +1406,18 @@ export function AdminPanel({
                               )}
                             </DialogContent>
                           </Dialog>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="group text-red-600 bg-transparent hover:bg-transparent hover:text-red-700 transition-all duration-200 hover:scale-110"
-                            onClick={() => setDeleteTarget(complaint)}
-                            aria-label={`Delete request: ${complaint.title}`}
-                            title="Delete Request"
-                          >
-                            <Trash2 className="w-4 h-4 transition-transform duration-200 group-hover:rotate-12" />
-                          </Button>
+                          {((archivedView && complaint.isArchived) || (!archivedView && ["resolved", "rejected"].includes(complaint.status))) && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="group text-muted-foreground bg-transparent hover:bg-muted hover:text-foreground transition-all duration-200 hover:scale-110"
+                              onClick={() => setArchiveTarget(complaint)}
+                              aria-label={`${archivedView ? "Restore" : "Archive"} request: ${complaint.title}`}
+                              title={archivedView ? "Restore Request" : "Archive Request"}
+                            >
+                              {archivedView ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -1432,11 +1500,7 @@ export function AdminPanel({
                             variant="outline"
                             size="sm"
                             className="w-full"
-                            onClick={() => {
-                              setSelectedComplaint(complaint);
-                              setAdminNotes(complaint.adminNotes || "");
-                              setSelectedPriority(complaint.priority);
-                            }}
+                            onClick={() => openComplaint(complaint)}
                           >
                             Manage Request
                           </Button>
@@ -1693,15 +1757,17 @@ export function AdminPanel({
                           )}
                         </DialogContent>
                       </Dialog>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        className="group w-full transition-all duration-200 hover:scale-[1.02] hover:shadow-md"
-                        onClick={() => setDeleteTarget(complaint)}
-                      >
-                        <Trash2 className="w-4 h-4 mr-2 transition-transform duration-200 group-hover:rotate-12" />
-                        Delete
-                      </Button>
+                      {((archivedView && complaint.isArchived) || (!archivedView && ["resolved", "rejected"].includes(complaint.status))) && (
+                        <Button
+                          variant={archivedView ? "outline" : "secondary"}
+                          size="sm"
+                          className="group w-full transition-all duration-200 hover:scale-[1.02] hover:shadow-md"
+                          onClick={() => setArchiveTarget(complaint)}
+                        >
+                          {archivedView ? <ArchiveRestore className="w-4 h-4 mr-2" /> : <Archive className="w-4 h-4 mr-2" />}
+                          {archivedView ? "Restore" : "Archive"}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -1718,29 +1784,28 @@ export function AdminPanel({
       </Card>
 
       <AlertDialog
-        open={Boolean(deleteTarget)}
+        open={Boolean(archiveTarget)}
         onOpenChange={(open) => {
-          if (!open) setDeleteTarget(null);
+          if (!open) setArchiveTarget(null);
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Request?</AlertDialogTitle>
+            <AlertDialogTitle>{archivedView ? "Restore Request?" : "Archive Request?"}</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete
-              {deleteTarget ? ` \"${deleteTarget.title}\"` : " this request"}.
-              This action cannot be undone.
+              {archivedView
+                ? `Restore${archiveTarget ? ` "${archiveTarget.title}"` : " this request"} to the active records?`
+                : `Archive${archiveTarget ? ` "${archiveTarget.title}"` : " this request"}? It will be hidden from active lists; its record and history will be retained.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>
-              No, Keep It
+              Cancel
             </AlertDialogCancel>
             <AlertDialogAction
-            className="bg-destructive hover:bg-destructive/90"
-            style={{ color: "#ffffff" }}
-              onClick={handleConfirmDelete}>
-              Yes, Delete
+              onClick={handleConfirmArchive}
+            >
+              {archivedView ? "Restore" : "Archive"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

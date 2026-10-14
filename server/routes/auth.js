@@ -2,6 +2,7 @@ const express = require("express");
 const {
   getCurrentUser,
   login,
+  reactivateAccount,
   register,
   requestPasswordRecovery,
   verifyPasswordRecoveryOtp,
@@ -11,7 +12,7 @@ const {
   verifyEmail,
   updateProfile,
   updateNotificationSettings,
-  deleteCurrentUserAccount,
+  deactivateCurrentUserAccount,
 } = require("../controllers/authController");
 const { saveProfilePicture, asyncRoute } = require("../controllers/storageController");
 const { authenticate } = require("../middleware/authenticate");
@@ -20,6 +21,7 @@ const { profileImageUpload } = require("../middleware/upload");
 const router = express.Router();
 
 router.post("/login", asyncRoute(login));
+router.post("/reactivate", asyncRoute(reactivateAccount));
 router.post("/register", asyncRoute(register));
 router.post("/password-recovery/request", asyncRoute(requestPasswordRecovery));
 router.post("/password-recovery/verify", asyncRoute(verifyPasswordRecoveryOtp));
@@ -30,7 +32,7 @@ router.post("/resend-verification", asyncRoute(resendVerification));
 router.get("/me", authenticate, asyncRoute(getCurrentUser));
 router.put("/profile", authenticate, asyncRoute(updateProfile));
 router.put("/notifications", authenticate, asyncRoute(updateNotificationSettings));
-router.delete("/profile", authenticate, asyncRoute(deleteCurrentUserAccount));
+router.post("/deactivate", authenticate, asyncRoute(deactivateCurrentUserAccount));
 router.put("/profile/picture", authenticate, profileImageUpload, asyncRoute(saveProfilePicture));
 
 module.exports = router;

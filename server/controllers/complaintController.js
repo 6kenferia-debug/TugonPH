@@ -1,9 +1,10 @@
 const mongoose = require("mongoose");
 const Complaint = require("../models/Complaint");
 const User = require("../models/User");
-const { removePublicFileUrl } = require("../services/storage-service");
 const { sendStatusUpdateEmail } = require("../services/email");
 const { createRequestHistoryEntry, createRequestHistoryEntries, getRequestHistory } = require("../services/requestHistory");
+const { restoreActiveRequests } = require("../services/restore-active-requests");
+const { archivedResidentFilter } = require("../services/archived-resident-filter");
 
 async function recordComplaintHistory({ user, existingComplaint, nextComplaint, updates }) {
   const entries = [];
@@ -138,9 +139,44 @@ function pagination(req) {
 }
 
 async function list(req, res) {
-  const filter = req.user.role === "admin" ? {} : { userId: req.user._id };
+  const archived = req.query.archived === "true";
+  if (req.query.archived !== undefined && !["true", "false"].includes(req.query.archived)) {
+    return res.status(400).json({ error: "archived must be true or false.", code: "INVALID_ARCHIVE_FILTER" });
+  }
+  const includeMedia = req.query.includeMedia !== "false";
+  if (req.query.includeMedia !== undefined && !["true", "false"].includes(req.query.includeMedia)) {
+    return res.status(400).json({ error: "includeMedia must be true or false.", code: "INVALID_MEDIA_FILTER" });
+  }
+  if (archived && req.user.role !== "admin") {
+    return res.status(403).json({ error: "Only admins can view archived complaints." });
+  }
+  await restoreActiveRequests(Complaint, "complaint", "Complaint");
+  const archivedResidentIds = req.user.role === "admin"
+    ? await User.distinct("_id", archivedResidentFilter())
+    : [];
+  const filter = {
+    ...(req.user.role === "admin" ? {} : { userId: req.user._id }),
+  };
+  if (archived) {
+    filter.$or = [
+      { isArchived: true, status: { $in: ["resolved", "rejected"] } },
+      { userId: { $in: archivedResidentIds } },
+    ];
+  } else {
+    filter.isArchived = { $ne: true };
+    if (req.user.role === "admin") filter.userId = { $nin: archivedResidentIds };
+  }
   const { limit, skip } = pagination(req);
-  const complaints = await Complaint.find(filter).sort({ dateSubmitted: -1 }).skip(skip).limit(limit);
+  let query = Complaint.find(filter);
+  if (!includeMedia && req.user.role === "admin") {
+    query = query.select("-photo -resolutionProofImage");
+  }
+  const records = await query.sort({ dateSubmitted: -1 }).skip(skip).limit(limit);
+  const archivedResidentIdSet = new Set(archivedResidentIds.map(String));
+  const complaints = records.map((record) => ({
+    ...record.toJSON(),
+    ownerArchived: archivedResidentIdSet.has(String(record.userId)),
+  }));
   return res.json({ complaints });
 }
 
@@ -150,6 +186,7 @@ async function getById(req, res) {
   }
   const complaint = await Complaint.findById(req.params.id);
   if (!complaint) return res.status(404).json({ error: "Complaint not found." });
+  if (complaint.isArchived && req.user.role !== "admin") return res.status(404).json({ error: "Complaint not found." });
   if (req.user.role !== "admin" && String(complaint.userId) !== String(req.user._id)) {
     return res.status(403).json({ error: "You cannot access this complaint." });
   }
@@ -163,6 +200,7 @@ async function getHistory(req, res) {
 
   const complaint = await Complaint.findById(req.params.id).select("_id userId");
   if (!complaint) return res.status(404).json({ error: "Complaint not found." });
+  if (complaint.isArchived && req.user.role !== "admin") return res.status(404).json({ error: "Complaint not found." });
   if (req.user.role !== "admin" && String(complaint.userId) !== String(req.user._id)) {
     return res.status(403).json({ error: "You cannot access this complaint." });
   }
@@ -225,6 +263,7 @@ async function update(req, res) {
 
   const existingComplaint = await Complaint.findById(req.params.id);
   if (!existingComplaint) return res.status(404).json({ error: "Complaint not found." });
+  if (existingComplaint.isArchived) return res.status(409).json({ error: "Restore this complaint before editing it.", code: "RECORD_ARCHIVED" });
 
   const previousComplaintSnapshot = {
     status: existingComplaint.status,
@@ -271,16 +310,63 @@ async function update(req, res) {
   return res.json({ complaint });
 }
 
-async function remove(req, res) {
+async function archive(req, res) {
   if (!mongoose.isValidObjectId(req.params.id)) {
     return res.status(400).json({ error: "Invalid record identifier.", code: "INVALID_ID" });
   }
-  const complaint = await Complaint.findByIdAndDelete(req.params.id);
+  const complaint = await Complaint.findById(req.params.id);
   if (!complaint) return res.status(404).json({ error: "Complaint not found." });
-  if (complaint.resolutionProofImage) {
-    await removePublicFileUrl(complaint.resolutionProofImage).catch(() => false);
+  if (complaint.isArchived) return res.status(409).json({ error: "Restore this complaint before changing its status.", code: "RECORD_ARCHIVED" });
+  if (!["resolved", "rejected"].includes(complaint.status)) {
+    return res.status(409).json({
+      error: "Only resolved or rejected complaints can be archived.",
+      code: "REQUEST_NOT_ARCHIVABLE",
+    });
   }
-  return res.json({ message: "Complaint deleted successfully." });
+  if (!complaint.isArchived) {
+    const reason = typeof req.body.reason === "string" ? req.body.reason.trim() : "";
+    if (reason.length > 500) return res.status(400).json({ error: "Archive reason must be 500 characters or fewer." });
+    complaint.isArchived = true;
+    complaint.archivedAt = new Date();
+    complaint.archivedBy = req.user._id;
+    complaint.archiveReason = reason;
+    await complaint.save();
+    await createRequestHistoryEntry({
+      requestType: "complaint",
+      requestId: complaint._id,
+      action: "Request archived",
+      previousValue: "active",
+      newValue: "archived",
+      details: reason || "Request archived by an administrator.",
+      user: req.user,
+    });
+  }
+  return res.json({ complaint, message: "Complaint archived successfully." });
 }
 
-module.exports = { asyncRoute, list, getById, getHistory, create, update, remove };
+async function unarchive(req, res) {
+  if (!mongoose.isValidObjectId(req.params.id)) {
+    return res.status(400).json({ error: "Invalid record identifier.", code: "INVALID_ID" });
+  }
+  const complaint = await Complaint.findById(req.params.id);
+  if (!complaint) return res.status(404).json({ error: "Complaint not found." });
+  if (complaint.isArchived) {
+    complaint.isArchived = false;
+    complaint.archivedAt = null;
+    complaint.archivedBy = null;
+    complaint.archiveReason = "";
+    await complaint.save();
+    await createRequestHistoryEntry({
+      requestType: "complaint",
+      requestId: complaint._id,
+      action: "Request restored",
+      previousValue: "archived",
+      newValue: "active",
+      details: "Request restored from the archive.",
+      user: req.user,
+    });
+  }
+  return res.json({ complaint, message: "Complaint restored successfully." });
+}
+
+module.exports = { asyncRoute, list, getById, getHistory, create, update, archive, unarchive };

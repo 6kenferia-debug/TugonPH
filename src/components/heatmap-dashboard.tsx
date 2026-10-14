@@ -25,19 +25,25 @@ interface HeatmapDashboardProps {
   assistanceRequests: AssistanceRequest[];
 }
 
+const ACTIONABLE_STATUSES = new Set(["pending", "in-progress"]);
+
 export function HeatmapDashboard({
   complaints,
   assistanceRequests,
 }: HeatmapDashboardProps) {
   const requests = [
-    ...complaints.map((complaint) => ({
-      ...complaint,
-      recordType: "complaint" as const,
-    })),
-    ...assistanceRequests.map((request) => ({
-      ...request,
-      recordType: "assistance" as const,
-    })),
+    ...complaints
+      .filter((complaint) => ACTIONABLE_STATUSES.has(complaint.status))
+      .map((complaint) => ({
+        ...complaint,
+        recordType: "complaint" as const,
+      })),
+    ...assistanceRequests
+      .filter((request) => ACTIONABLE_STATUSES.has(request.status))
+      .map((request) => ({
+        ...request,
+        recordType: "assistance" as const,
+      })),
   ];
 
   return (

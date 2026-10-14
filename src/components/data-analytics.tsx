@@ -24,6 +24,8 @@ import {
   ChevronDown,
   FileSpreadsheet,
   FileText,
+  Archive,
+  ArchiveRestore,
   Trophy,
   Clock,
   Heart,
@@ -82,6 +84,8 @@ interface Complaint {
 interface DataAnalyticsProps {
   complaints: Complaint[];
   assistanceRequests?: AssistanceRequest[];
+  archivedView: boolean;
+  onToggleArchiveView: () => void;
   onRefresh?: () => Promise<void> | void;
   refreshing?: boolean;
 }
@@ -261,6 +265,8 @@ function buildStatusPie(items: { status: string }[]) {
 export function DataAnalytics({
   complaints,
   assistanceRequests = [],
+  archivedView,
+  onToggleArchiveView,
   onRefresh,
   refreshing = false,
 }: DataAnalyticsProps) {
@@ -412,7 +418,7 @@ export function DataAnalytics({
           <meta charset="UTF-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
           <base href="${document.baseURI}" />
-          <title>Data Analytics Report</title>
+          <title>${archivedView ? "Archived " : ""}Data Analytics Report</title>
           ${headMarkup}
           <style>
             @page {
@@ -518,7 +524,7 @@ export function DataAnalytics({
         <body>
           <main class="report-shell">
             <header class="report-header">
-              <h1>Data Analytics Report</h1>
+              <h1>${archivedView ? "Archived " : ""}Data Analytics Report</h1>
               <p>${tabLabel} dashboard · ${timePeriod} view</p>
               <p>Generated: ${exportedAt}</p>
             </header>
@@ -549,10 +555,21 @@ export function DataAnalytics({
             <h1 className="text-xl sm:text-2xl flex items-center space-x-2">
               <BarChart3 className="w-6 h-6" />
               <span>Data Analytics</span>
+              {archivedView && <Badge variant="outline">Archived records</Badge>}
             </h1>
 
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onToggleArchiveView}
+            >
+              {archivedView
+                ? <ArchiveRestore className="w-4 h-4 mr-1" />
+                : <Archive className="w-4 h-4 mr-1" />}
+              {archivedView ? "Active Records" : "Archived Records"}
+            </Button>
             <Button
               variant="secondary"
               size="sm"

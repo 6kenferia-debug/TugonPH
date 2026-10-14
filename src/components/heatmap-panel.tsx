@@ -285,6 +285,8 @@ export function HeatmapPanel({
   const leafletRef = useRef<any>(null);
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [mapReady, setMapReady] = useState(false);
+  const [heatPluginReady, setHeatPluginReady] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
   const [pointCount, setPointCount] = useState(0);
 
   const visibleCategories = useMemo(() => CATEGORY_OPTIONS, []);
@@ -412,62 +414,81 @@ export function HeatmapPanel({
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
-    import("leaflet").then(async (L) => {
-      if (mapRef.current) return;
-      delete (L.Icon.Default.prototype as any)._getIconUrl;
+    let cancelled = false;
 
-      // Ensure plugin extends the same Leaflet instance.
-      (window as any).L = L;
+    const initializeMap = async () => {
+      try {
+        const L = await import("leaflet");
+        if (cancelled || mapRef.current) return;
+        delete (L.Icon.Default.prototype as any)._getIconUrl;
 
-      // Load heat plugin before storing the reference used later.
-      await loadLeafletHeat();
+        // Ensure plugin extends the same Leaflet instance.
+        (window as any).L = L;
+        leafletRef.current = L;
 
-      leafletRef.current = L;
+        const map = L.map(mapContainerRef.current!, {
+          center: CENTER,
+          zoom: 15.64,
+          minZoom,
+          maxZoom: 19,
+          zoomControl: true,
+          attributionControl: true,
+        });
+        mapRef.current = map;
 
-      const map = L.map(mapContainerRef.current!, {
-        center: CENTER,
-        zoom: 15.64,
-        minZoom,
-        maxZoom: 19,
-        zoomControl: true,
-        attributionControl: true,
-      });
+        const pane = map.getPane(POINTS_PANE) ?? map.createPane(POINTS_PANE);
+        pane.style.zIndex = "650";
+        pane.style.pointerEvents = "auto";
 
-      const pane = map.getPane(POINTS_PANE) ?? map.createPane(POINTS_PANE);
-      pane.style.zIndex = "650";
-      pane.style.pointerEvents = "auto";
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution:
+            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+          maxZoom: 19,
+        }).addTo(map);
 
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-        maxZoom: 19,
-      }).addTo(map);
+        L.polygon(POLYGON_COORDS, {
+          color: "#3b82f6",
+          weight: 2,
+          opacity: 0.7,
+          fillColor: "#3b82f6",
+          fillOpacity: 0.06,
+          dashArray: "5 4",
+        })
+          .addTo(map)
+          .bindTooltip("Barangay Marulas", {
+            direction: "center",
+            sticky: true,
+          });
 
-      // Boundary polygon
-      L.polygon(POLYGON_COORDS, {
-        color: "#3b82f6",
-        weight: 2,
-        opacity: 0.7,
-        fillColor: "#3b82f6",
-        fillOpacity: 0.06,
-        dashArray: "5 4",
-      })
-        .addTo(map)
-        .bindTooltip("Barangay Marulas", { direction: "center", sticky: true });
+        // Leaflet needs to recalculate tile coverage when a hidden container
+        // becomes visible.
+        setTimeout(() => map.invalidateSize(), 0);
+        setTimeout(() => map.invalidateSize(), 150);
+        setTimeout(() => map.invalidateSize(), 400);
 
-      mapRef.current = map;
+        setMapReady(true);
+        void loadLeafletHeat()
+          .then(() => {
+            if (!cancelled) setHeatPluginReady(true);
+          })
+          .catch((error) => {
+            console.warn(
+              "Leaflet heat plugin failed to load; rendering point dots instead.",
+              error,
+            );
+          });
+      } catch (error) {
+        console.error("Failed to initialize the heatmap map.", error);
+        if (!cancelled) {
+          setMapError("Unable to load the map. Please refresh and try again.");
+        }
+      }
+    };
 
-      // ── Key fix: Leaflet renders black when the container goes from
-      // hidden→visible (e.g. inside a collapsible). invalidateSize() forces
-      // it to recalculate tile coverage and fill the container correctly.
-      setTimeout(() => map.invalidateSize(), 0);
-      setTimeout(() => map.invalidateSize(), 150);
-      setTimeout(() => map.invalidateSize(), 400);
-
-      setMapReady(true);
-    });
+    void initializeMap();
 
     return () => {
+      cancelled = true;
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;
@@ -484,7 +505,13 @@ export function HeatmapPanel({
     if (mapReady) {
       rebuildHeatLayer(categoryFilter);
     }
-  }, [requests, mapReady, categoryFilter, rebuildHeatLayer]);
+  }, [
+    requests,
+    mapReady,
+    heatPluginReady,
+    categoryFilter,
+    rebuildHeatLayer,
+  ]);
 
   useEffect(() => {
     if (!mapRef.current || !expanded) return;
@@ -558,9 +585,11 @@ export function HeatmapPanel({
           {!mapReady && (
             <div className="absolute inset-0 flex items-center justify-center bg-muted/80">
               <div className="text-center space-y-2">
-                <RefreshCw className="w-7 h-7 text-primary animate-spin mx-auto" />
+                {!mapError && (
+                  <RefreshCw className="w-7 h-7 text-primary animate-spin mx-auto" />
+                )}
                 <p className="text-sm text-muted-foreground">
-                  Loading heatmap…
+                  {mapError ?? "Loading heatmap…"}
                 </p>
               </div>
             </div>

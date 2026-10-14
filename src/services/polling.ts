@@ -38,7 +38,7 @@ let connectedToken: string | null = null;
 let isConnected = false;
 let connectionGeneration = 0;
 
-const POLL_INTERVAL = 7000;
+const POLL_INTERVAL = 60000;
 const RESOURCES = ["complaints", "assistance-requests"];
 
 export function connectRealtime(token = getAuthToken()): void {

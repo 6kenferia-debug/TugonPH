@@ -1,6 +1,6 @@
 const express = require("express");
 const { asyncRoute } = require("../controllers/complaintController");
-const { deleteUser, listUsers, updateUser, reviewRegistration } = require("../controllers/userController");
+const { listUsers, updateUser, reviewRegistration, archiveUser, unarchiveUser } = require("../controllers/userController");
 const { authenticate } = require("../middleware/authenticate");
 const authorize = require("../middleware/authorize");
 
@@ -9,6 +9,7 @@ router.use(authenticate, authorize("admin"));
 router.get("/", asyncRoute(listUsers));
 router.put("/:userId/verify-address", asyncRoute(reviewRegistration));
 router.put("/:userId", asyncRoute(updateUser));
-router.delete("/:userId", asyncRoute(deleteUser));
+router.patch("/:userId/archive", asyncRoute(archiveUser));
+router.patch("/:userId/unarchive", asyncRoute(unarchiveUser));
 
 module.exports = router;

@@ -27,10 +27,16 @@ export interface AssistanceRequest {
   longitude?: number;
   coordinates?: { lat: number; lng: number };
   recordType: "assistance";
+  isArchived?: boolean;
+  ownerArchived?: boolean;
+  archivedAt?: string | null;
+  archivedBy?: string | null;
+  archiveReason?: string;
 }
 
 interface AssistanceContextType {
   assistanceRequests: AssistanceRequest[];
+  archivedAssistanceRequests: AssistanceRequest[];
   loading: boolean;
   addAssistanceRequest: (
     request: Omit<AssistanceRequest, "id" | "dateSubmitted" | "recordType">,
@@ -39,26 +45,28 @@ interface AssistanceContextType {
     id: string,
     updates: Partial<AssistanceRequest>,
   ) => Promise<{ error?: string }>;
-  deleteAssistanceRequest: (id: string) => Promise<{ error?: string }>;
+  archiveAssistanceRequest: (id: string) => Promise<{ error?: string }>;
+  unarchiveAssistanceRequest: (id: string) => Promise<{ error?: string }>;
   uploadAssistanceResolutionProof: (
     id: string,
     file: File,
   ) => Promise<{ error?: string; url?: string }>;
-  fetchAssistanceRequests: () => Promise<void>;
+  fetchAssistanceRequests: (archived?: boolean) => Promise<void>;
 }
 
 const AssistanceContext = createContext<AssistanceContextType | undefined>(undefined);
-type FetchOptions = { suppressLoading?: boolean; suppressErrorToast?: boolean };
+type FetchOptions = { suppressLoading?: boolean; suppressErrorToast?: boolean; archived?: boolean };
 type ApiAssistanceRequest = Record<string, any>;
 
 export function AssistanceProvider({ children }: { children: React.ReactNode }) {
   const [assistanceRequests, setAssistanceRequests] = useState<AssistanceRequest[]>([]);
+  const [archivedAssistanceRequests, setArchivedAssistanceRequests] = useState<AssistanceRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const { user, isAdmin, isGuest, loading: authLoading } = useAuth();
   const hasConnectedRef = useRef(false);
 
-  const getCacheKey = (userId: string, admin: boolean) =>
-    `tugonph.assistance.${admin ? "admin" : "user"}.${userId}`;
+  const getCacheKey = (userId: string, admin: boolean, archived = false) =>
+    `tugonph.assistance.${admin ? "admin" : "user"}.${userId}.${archived ? "archived" : "active"}`;
   const cacheKey = user ? getCacheKey(user.id, isAdmin) : null;
 
   const readCache = (key: string): AssistanceRequest[] | null => {
@@ -92,6 +100,17 @@ export function AssistanceProvider({ children }: { children: React.ReactNode }) 
     });
   };
 
+  const setArchivedAndCache = (
+    next: AssistanceRequest[] | ((previous: AssistanceRequest[]) => AssistanceRequest[]),
+    key: string | null,
+  ) => {
+    setArchivedAssistanceRequests((previous) => {
+      const resolved = typeof next === "function" ? next(previous) : next;
+      writeCache(key, resolved);
+      return resolved;
+    });
+  };
+
   function transform(value: ApiAssistanceRequest): AssistanceRequest {
     const latitude = value.latitude ?? value.lat;
     const longitude = value.longitude ?? value.lng;
@@ -114,6 +133,11 @@ export function AssistanceProvider({ children }: { children: React.ReactNode }) 
       respondent: value.respondent,
       userId: value.userId ?? value.user_id,
       userName: value.userName ?? value.user_name,
+      isArchived: value.isArchived === true,
+      ownerArchived: value.ownerArchived === true,
+      archivedAt: value.archivedAt ?? null,
+      archivedBy: value.archivedBy ?? null,
+      archiveReason: value.archiveReason ?? "",
       latitude: latitude ?? undefined,
       longitude: longitude ?? undefined,
       coordinates: latitude != null && longitude != null
@@ -124,18 +148,28 @@ export function AssistanceProvider({ children }: { children: React.ReactNode }) 
   }
 
   const fetchInternal = async (options: FetchOptions = {}) => {
-    const { suppressLoading = false, suppressErrorToast = false } = options;
+    const {
+      suppressLoading = false,
+      suppressErrorToast = false,
+      archived = false,
+    } = options;
     try {
       if (!suppressLoading) setLoading(true);
       if (!user) {
         setAssistanceRequests([]);
+        setArchivedAssistanceRequests([]);
         return;
       }
 
       const { assistanceRequests: records } = await api.get<{
         assistanceRequests: ApiAssistanceRequest[];
-      }>("/assistance");
-      setAndCache(records.map(transform), cacheKey);
+      }>(`/assistance?archived=${archived}`);
+      const modeCacheKey = user ? getCacheKey(user.id, isAdmin, archived) : cacheKey;
+      if (archived) {
+        setArchivedAndCache(records.map(transform), modeCacheKey);
+      } else {
+        setAndCache(records.map(transform), modeCacheKey);
+      }
     } catch (error) {
       console.error("Error fetching assistance requests:", error);
       if (!suppressErrorToast) {
@@ -150,6 +184,7 @@ export function AssistanceProvider({ children }: { children: React.ReactNode }) 
     if (authLoading) return;
     if (!user) {
       setAssistanceRequests([]);
+      setArchivedAssistanceRequests([]);
       setLoading(false);
       hasConnectedRef.current = false;
       return;
@@ -158,12 +193,19 @@ export function AssistanceProvider({ children }: { children: React.ReactNode }) 
     const handleRealtimeChange = (value: { id: string; userId?: string | null }) => {
       if (!isAdmin && value.userId !== user.id) return;
       void fetchInternal({ suppressLoading: true, suppressErrorToast: true });
+      if (isAdmin) {
+        void fetchInternal({ suppressLoading: true, suppressErrorToast: true, archived: true });
+      }
     };
     const removeFromRealtime = (value: { id: string; userId?: string | null }) => {
       if (!isAdmin && value.userId !== user.id) return;
       setAndCache(
         (previous) => previous.filter((item) => item.id !== value.id),
         cacheKey,
+      );
+      setArchivedAndCache(
+        (previous) => previous.filter((item) => item.id !== value.id),
+        user ? getCacheKey(user.id, isAdmin, true) : null,
       );
     };
 
@@ -173,6 +215,9 @@ export function AssistanceProvider({ children }: { children: React.ReactNode }) 
     const unsubscribeReconnect = onRealtimeConnect(() => {
       if (hasConnectedRef.current) {
         void fetchInternal({ suppressLoading: true, suppressErrorToast: true });
+        if (isAdmin) {
+          void fetchInternal({ suppressLoading: true, suppressErrorToast: true, archived: true });
+        }
       }
       hasConnectedRef.current = true;
     });
@@ -195,8 +240,8 @@ export function AssistanceProvider({ children }: { children: React.ReactNode }) 
     };
   }, [user, isAdmin, authLoading]);
 
-  const fetchAssistanceRequests = async () => {
-    await fetchInternal();
+  const fetchAssistanceRequests = async (archived = false) => {
+    await fetchInternal({ archived });
   };
 
   const addAssistanceRequest = async (
@@ -274,21 +319,55 @@ export function AssistanceProvider({ children }: { children: React.ReactNode }) 
     }
   };
 
-  const deleteAssistanceRequest = async (id: string) => {
+  const archiveAssistanceRequest = async (id: string) => {
     try {
-      if (!user) return { error: "You must be logged in to delete" };
-      if (!isAdmin) return { error: "Only admins can delete requests" };
+      if (!user) return { error: "You must be logged in to archive a request" };
+      if (!isAdmin) return { error: "Only admins can archive requests" };
 
-      await api.delete(`/assistance/${encodeURIComponent(id)}`);
+      const { assistanceRequest } = await api.patch<{
+        assistanceRequest: ApiAssistanceRequest;
+      }>(`/assistance/${encodeURIComponent(id)}/archive`);
+      const archived = transform(assistanceRequest);
       setAndCache(
         (previous) => previous.filter((record) => record.id !== id),
         cacheKey,
       );
-      toast.success("Assistance request deleted successfully");
+      setArchivedAndCache(
+        (previous) => [archived, ...previous.filter((record) => record.id !== id)],
+        user ? getCacheKey(user.id, isAdmin, true) : null,
+      );
+      toast.success("Assistance request archived successfully");
       return {};
     } catch (error) {
-      console.error("Error deleting assistance request:", error);
-      const message = error instanceof Error ? error.message : "Failed to delete assistance request";
+      console.error("Error archiving assistance request:", error);
+      const message = error instanceof Error ? error.message : "Failed to archive assistance request";
+      toast.error(message);
+      return { error: message };
+    }
+  };
+
+  const unarchiveAssistanceRequest = async (id: string) => {
+    try {
+      if (!user) return { error: "You must be logged in to restore a request" };
+      if (!isAdmin) return { error: "Only admins can restore requests" };
+
+      const { assistanceRequest } = await api.patch<{
+        assistanceRequest: ApiAssistanceRequest;
+      }>(`/assistance/${encodeURIComponent(id)}/unarchive`);
+      const restored = transform(assistanceRequest);
+      setAndCache(
+        (previous) => [restored, ...previous.filter((record) => record.id !== id)],
+        cacheKey,
+      );
+      setArchivedAndCache(
+        (previous) => previous.filter((record) => record.id !== id),
+        user ? getCacheKey(user.id, isAdmin, true) : null,
+      );
+      toast.success("Assistance request restored successfully");
+      return {};
+    } catch (error) {
+      console.error("Error restoring assistance request:", error);
+      const message = error instanceof Error ? error.message : "Failed to restore assistance request";
       toast.error(message);
       return { error: message };
     }
@@ -331,10 +410,12 @@ export function AssistanceProvider({ children }: { children: React.ReactNode }) 
   return (
     <AssistanceContext.Provider value={{
       assistanceRequests,
+      archivedAssistanceRequests,
       loading,
       addAssistanceRequest,
       updateAssistanceRequest,
-      deleteAssistanceRequest,
+      archiveAssistanceRequest,
+      unarchiveAssistanceRequest,
       uploadAssistanceResolutionProof,
       fetchAssistanceRequests,
     }}>

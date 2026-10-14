@@ -26,10 +26,16 @@ interface Complaint {
   latitude?: number;
   longitude?: number;
   coordinates?: { lat: number; lng: number };
+  isArchived?: boolean;
+  ownerArchived?: boolean;
+  archivedAt?: string | null;
+  archivedBy?: string | null;
+  archiveReason?: string;
 }
 
 interface ComplaintContextType {
   complaints: Complaint[];
+  archivedComplaints: Complaint[];
   loading: boolean;
   addComplaint: (
     complaint: Omit<Complaint, "id" | "dateSubmitted">,
@@ -38,17 +44,19 @@ interface ComplaintContextType {
     id: string,
     updates: Partial<Complaint>,
   ) => Promise<{ error?: string }>;
-  deleteComplaint: (id: string) => Promise<{ error?: string }>;
+  archiveComplaint: (id: string) => Promise<{ error?: string }>;
+  unarchiveComplaint: (id: string) => Promise<{ error?: string }>;
   uploadComplaintResolutionProof: (
     id: string,
     file: File,
   ) => Promise<{ error?: string; url?: string }>;
-  fetchComplaints: () => Promise<void>;
+  fetchComplaints: (archived?: boolean) => Promise<void>;
 }
 
 type FetchComplaintsOptions = {
   suppressLoading?: boolean;
   suppressErrorToast?: boolean;
+  archived?: boolean;
 };
 
 type ApiComplaint = Record<string, any>;
@@ -59,12 +67,13 @@ const ComplaintContext = createContext<ComplaintContextType | undefined>(
 
 export function ComplaintProvider({ children }: { children: React.ReactNode }) {
   const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [archivedComplaints, setArchivedComplaints] = useState<Complaint[]>([]);
   const [loading, setLoading] = useState(true);
   const { user, isAdmin, isGuest, loading: authLoading } = useAuth();
   const hasConnectedRef = useRef(false);
 
-  const getCacheKey = (userId: string, admin: boolean) =>
-    `tugonph.complaints.${admin ? "admin" : "user"}.${userId}`;
+  const getCacheKey = (userId: string, admin: boolean, archived = false) =>
+    `tugonph.complaints.${admin ? "admin" : "user"}.${userId}.${archived ? "archived" : "active"}`;
 
   const readCachedComplaints = (cacheKey: string): Complaint[] | null => {
     try {
@@ -94,6 +103,17 @@ export function ComplaintProvider({ children }: { children: React.ReactNode }) {
     cacheKey: string | null,
   ) => {
     setComplaints((previous) => {
+      const resolved = typeof next === "function" ? next(previous) : next;
+      writeCachedComplaints(cacheKey, resolved);
+      return resolved;
+    });
+  };
+
+  const setArchivedComplaintsAndCache = (
+    next: Complaint[] | ((previous: Complaint[]) => Complaint[]),
+    cacheKey: string | null,
+  ) => {
+    setArchivedComplaints((previous) => {
       const resolved = typeof next === "function" ? next(previous) : next;
       writeCachedComplaints(cacheKey, resolved);
       return resolved;
@@ -163,6 +183,11 @@ export function ComplaintProvider({ children }: { children: React.ReactNode }) {
       respondent: value.respondent,
       userId: value.userId ?? value.user_id,
       userName: value.userName ?? value.user_name,
+      isArchived: value.isArchived === true,
+      ownerArchived: value.ownerArchived === true,
+      archivedAt: value.archivedAt ?? null,
+      archivedBy: value.archivedBy ?? null,
+      archiveReason: value.archiveReason ?? "",
       latitude,
       longitude,
       ...(latitude !== undefined && longitude !== undefined
@@ -176,18 +201,28 @@ export function ComplaintProvider({ children }: { children: React.ReactNode }) {
   const fetchComplaintsInternal = async (
     options: FetchComplaintsOptions = {},
   ) => {
-    const { suppressLoading = false, suppressErrorToast = false } = options;
+    const {
+      suppressLoading = false,
+      suppressErrorToast = false,
+      archived = false,
+    } = options;
     try {
       if (!suppressLoading) setLoading(true);
       if (!user) {
         setComplaints([]);
+        setArchivedComplaints([]);
         return;
       }
 
       const { complaints: records } = await api.get<{ complaints: ApiComplaint[] }>(
-        "/complaints",
+        `/complaints?archived=${archived}&includeMedia=${isAdmin ? "false" : "true"}`,
       );
-      setComplaintsAndCache(records.map(transformComplaint), cacheKey);
+      const modeCacheKey = user ? getCacheKey(user.id, isAdmin, archived) : cacheKey;
+      if (archived) {
+        setArchivedComplaintsAndCache(records.map(transformComplaint), modeCacheKey);
+      } else {
+        setComplaintsAndCache(records.map(transformComplaint), modeCacheKey);
+      }
     } catch (error) {
       console.error("Error fetching complaints:", error);
       if (!suppressErrorToast) {
@@ -202,6 +237,7 @@ export function ComplaintProvider({ children }: { children: React.ReactNode }) {
     if (authLoading) return;
     if (!user) {
       setComplaints([]);
+      setArchivedComplaints([]);
       setLoading(false);
       hasConnectedRef.current = false;
       return;
@@ -210,12 +246,19 @@ export function ComplaintProvider({ children }: { children: React.ReactNode }) {
     const handleRealtimeChange = (value: { id: string; userId?: string | null }) => {
       if (!isAdmin && value.userId !== user.id) return;
       void fetchComplaintsInternal({ suppressLoading: true, suppressErrorToast: true });
+      if (isAdmin) {
+        void fetchComplaintsInternal({ suppressLoading: true, suppressErrorToast: true, archived: true });
+      }
     };
     const removeFromRealtime = (value: { id: string; userId?: string | null }) => {
       if (!isAdmin && value.userId !== user.id) return;
       setComplaintsAndCache(
         (previous) => previous.filter((item) => item.id !== value.id),
         cacheKey,
+      );
+      setArchivedComplaintsAndCache(
+        (previous) => previous.filter((item) => item.id !== value.id),
+        user ? getCacheKey(user.id, isAdmin, true) : null,
       );
     };
 
@@ -225,6 +268,9 @@ export function ComplaintProvider({ children }: { children: React.ReactNode }) {
     const unsubscribeReconnect = onRealtimeConnect(() => {
       if (hasConnectedRef.current) {
         void fetchComplaintsInternal({ suppressLoading: true, suppressErrorToast: true });
+        if (isAdmin) {
+          void fetchComplaintsInternal({ suppressLoading: true, suppressErrorToast: true, archived: true });
+        }
       }
       hasConnectedRef.current = true;
     });
@@ -247,8 +293,8 @@ export function ComplaintProvider({ children }: { children: React.ReactNode }) {
     };
   }, [user, isAdmin, authLoading]);
 
-  const fetchComplaints = async () => {
-    await fetchComplaintsInternal();
+  const fetchComplaints = async (archived = false) => {
+    await fetchComplaintsInternal({ archived });
   };
 
   const addComplaint = async (
@@ -324,21 +370,55 @@ export function ComplaintProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const deleteComplaint = async (id: string) => {
+  const archiveComplaint = async (id: string) => {
     try {
-      if (!user) return { error: "You must be logged in to delete a complaint" };
-      if (!isAdmin) return { error: "Only admins can delete complaints" };
+      if (!user) return { error: "You must be logged in to archive a complaint" };
+      if (!isAdmin) return { error: "Only admins can archive complaints" };
 
-      await api.delete(`/complaints/${encodeURIComponent(id)}`);
+      const { complaint } = await api.patch<{ complaint: ApiComplaint }>(
+        `/complaints/${encodeURIComponent(id)}/archive`,
+      );
+      const archived = transformComplaint(complaint);
       setComplaintsAndCache(
         (previous) => previous.filter((record) => record.id !== id),
         cacheKey,
       );
-      toast.success("Complaint deleted successfully");
+      setArchivedComplaintsAndCache(
+        (previous) => [archived, ...previous.filter((record) => record.id !== id)],
+        user ? getCacheKey(user.id, isAdmin, true) : null,
+      );
+      toast.success("Complaint archived successfully");
       return {};
     } catch (error) {
-      console.error("Error deleting complaint:", error);
-      const message = error instanceof Error ? error.message : "Failed to delete complaint";
+      console.error("Error archiving complaint:", error);
+      const message = error instanceof Error ? error.message : "Failed to archive complaint";
+      toast.error(message);
+      return { error: message };
+    }
+  };
+
+  const unarchiveComplaint = async (id: string) => {
+    try {
+      if (!user) return { error: "You must be logged in to restore a complaint" };
+      if (!isAdmin) return { error: "Only admins can restore complaints" };
+
+      const { complaint } = await api.patch<{ complaint: ApiComplaint }>(
+        `/complaints/${encodeURIComponent(id)}/unarchive`,
+      );
+      const restored = transformComplaint(complaint);
+      setComplaintsAndCache(
+        (previous) => [restored, ...previous.filter((record) => record.id !== id)],
+        cacheKey,
+      );
+      setArchivedComplaintsAndCache(
+        (previous) => previous.filter((record) => record.id !== id),
+        user ? getCacheKey(user.id, isAdmin, true) : null,
+      );
+      toast.success("Complaint restored successfully");
+      return {};
+    } catch (error) {
+      console.error("Error restoring complaint:", error);
+      const message = error instanceof Error ? error.message : "Failed to restore complaint";
       toast.error(message);
       return { error: message };
     }
@@ -381,10 +461,12 @@ export function ComplaintProvider({ children }: { children: React.ReactNode }) {
 
   const value = {
     complaints,
+    archivedComplaints,
     loading,
     addComplaint,
     updateComplaint,
-    deleteComplaint,
+    archiveComplaint,
+    unarchiveComplaint,
     uploadComplaintResolutionProof,
     fetchComplaints,
   };

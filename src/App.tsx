@@ -100,23 +100,28 @@ function AppContent() {
     useAuth();
   const {
     complaints,
+    archivedComplaints,
     loading: complaintsLoading,
     addComplaint,
     updateComplaint,
-    deleteComplaint,
+    archiveComplaint,
+    unarchiveComplaint,
     uploadComplaintResolutionProof,
     fetchComplaints,
   } = useComplaints();
   const {
     assistanceRequests,
+    archivedAssistanceRequests,
     loading: assistanceLoading,
     addAssistanceRequest,
     fetchAssistanceRequests,
     updateAssistanceRequest,
-    deleteAssistanceRequest,
+    archiveAssistanceRequest,
+    unarchiveAssistanceRequest,
     uploadAssistanceResolutionProof,
   } = useAssistance();
   const [currentView, setCurrentView] = useState("dashboard");
+  const [archivedRecordsView, setArchivedRecordsView] = useState(false);
   const [authView, setAuthView] = useState<"login" | "signup">("login");
   const [selectedComplaint, setSelectedComplaint] = useState<Complaint | null>(
     null,
@@ -264,10 +269,16 @@ function AppContent() {
     if (!user) return;
 
     const refreshLatest = () => {
-      void Promise.all([fetchComplaints(), fetchAssistanceRequests()]);
+      void Promise.all([
+        fetchComplaints(),
+        fetchAssistanceRequests(),
+        ...(archivedRecordsView
+          ? [fetchComplaints(true), fetchAssistanceRequests(true)]
+          : []),
+      ]);
     };
 
-    const intervalId = window.setInterval(refreshLatest, 15000);
+    const intervalId = window.setInterval(refreshLatest, 60000);
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         refreshLatest();
@@ -285,7 +296,7 @@ function AppContent() {
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("focus", onFocus);
     };
-  }, [user, fetchComplaints, fetchAssistanceRequests]);
+  }, [user, fetchComplaints, fetchAssistanceRequests, archivedRecordsView]);
 
   useEffect(() => {
     if (!user) return;
@@ -591,10 +602,22 @@ function AppContent() {
     markAllNotificationsRead();
   }, [currentView]);
 
+  const handleToggleArchivedRecords = () => {
+    const next = !archivedRecordsView;
+    setArchivedRecordsView(next);
+    void Promise.all([
+      fetchComplaints(next),
+      fetchAssistanceRequests(next),
+    ]);
+  };
+
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await Promise.all([fetchComplaints(), fetchAssistanceRequests()]);
+      await Promise.all([
+        fetchComplaints(archivedRecordsView),
+        fetchAssistanceRequests(archivedRecordsView),
+      ]);
       toast.success("Latest data loaded");
     } catch {
       toast.error("Failed to refresh");
@@ -704,8 +727,6 @@ function AppContent() {
       toast.success("Request updated successfully!");
     }
   };
-
-  const handleDeleteComplaint = async (id: string) => deleteComplaint(id);
 
   const handleViewDetails = (complaint: Complaint) => {
     setSelectedComplaint(complaint);
@@ -991,12 +1012,16 @@ function AppContent() {
 
         {currentView === "admin" && (
           <AdminPanel
-            complaints={complaints}
-            assistanceRequests={assistanceRequests}
+            complaints={archivedRecordsView ? archivedComplaints : complaints}
+            assistanceRequests={archivedRecordsView ? archivedAssistanceRequests : assistanceRequests}
             onUpdateComplaint={handleUpdateComplaint}
-            onDeleteComplaint={handleDeleteComplaint}
+            onArchiveComplaint={archiveComplaint}
+            onUnarchiveComplaint={unarchiveComplaint}
             onUpdateAssistance={updateAssistanceRequest}
-            onDeleteAssistance={deleteAssistanceRequest}
+            onArchiveAssistance={archiveAssistanceRequest}
+            onUnarchiveAssistance={unarchiveAssistanceRequest}
+            archivedView={archivedRecordsView}
+            onToggleArchiveView={handleToggleArchivedRecords}
             onUploadComplaintResolutionProof={uploadComplaintResolutionProof}
             onUploadAssistanceResolutionProof={uploadAssistanceResolutionProof}
             onRefresh={handleRefresh}
@@ -1153,8 +1178,10 @@ function AppContent() {
 
         {currentView === "analytics" && (
           <DataAnalytics
-            complaints={complaints}
-            assistanceRequests={assistanceRequests}
+            complaints={archivedRecordsView ? archivedComplaints : complaints}
+            assistanceRequests={archivedRecordsView ? archivedAssistanceRequests : assistanceRequests}
+            archivedView={archivedRecordsView}
+            onToggleArchiveView={handleToggleArchivedRecords}
             onRefresh={handleRefresh}
             refreshing={refreshing}
           />

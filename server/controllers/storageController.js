@@ -53,6 +53,9 @@ async function servePublicFile(req, res, next) {
 async function saveResolutionProof(req, res, Model, recordType) {
   const record = await Model.findById(req.params.id);
   if (!record) return res.status(404).json({ error: `${recordType} not found.` });
+  if (record.isArchived) {
+    return res.status(409).json({ error: "Restore this request before uploading resolution proof." });
+  }
 
   const kind = recordType === "Complaint" ? "complaint-proof" : "assistance-proof";
   const stored = await saveFile({
@@ -95,15 +98,8 @@ const saveComplaintProof = (req, res) =>
 const saveAssistanceProof = (req, res) =>
   saveResolutionProof(req, res, AssistanceRequest, "AssistanceRequest");
 
-async function removeUserFiles(user) {
-  const tasks = [];
-  if (user.profilePictureUrl) tasks.push(removePublicFileUrl(user.profilePictureUrl));
-  await Promise.all(tasks.map((task) => task.catch(() => false)));
-}
-
 module.exports = {
   asyncRoute,
-  removeUserFiles,
   saveAssistanceProof,
   saveComplaintProof,
   saveProfilePicture,
