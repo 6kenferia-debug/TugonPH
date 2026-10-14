@@ -135,7 +135,7 @@ If you see `querySrv ECONNREFUSED`, add `MONGODB_DNS_SERVERS` in `server/.env` w
 
 ### Request update polling
 
-The app checks for change in complaints and assistance requests every minute using the current user token. Residents only receive updates for their own requests. Admins receive updates for all requests.
+The app checks for change in complaints and assistance requests every 7 seconds using the current user token. Residents only receive updates for their own requests. Admins receive updates for all requests.
 
 The polling response includes request IDs, user IDs, and timestamps. When a change is found, the app loads the latest request data from the API. MongoDB and the REST API stay as the source of truth. See [the integration mapping and test plan](./docs/integration-testing.md) for more details.
 
@@ -280,10 +280,4 @@ TugonPH/
 - [x] Email OTP registration flow with pending approval
 - [x] Analytics export for web
 
-## License
 
-This project is private and proprietary.
-
----
-
-Current branch: Active development

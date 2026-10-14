@@ -159,7 +159,7 @@ async function list(req, res) {
   };
   if (archived) {
     filter.$or = [
-      { isArchived: true, status: { $in: ["resolved", "rejected"] } },
+      { isArchived: true },
       { userId: { $in: archivedResidentIds } },
     ];
   } else {
@@ -317,12 +317,6 @@ async function archive(req, res) {
   const complaint = await Complaint.findById(req.params.id);
   if (!complaint) return res.status(404).json({ error: "Complaint not found." });
   if (complaint.isArchived) return res.status(409).json({ error: "Restore this complaint before changing its status.", code: "RECORD_ARCHIVED" });
-  if (!["resolved", "rejected"].includes(complaint.status)) {
-    return res.status(409).json({
-      error: "Only resolved or rejected complaints can be archived.",
-      code: "REQUEST_NOT_ARCHIVABLE",
-    });
-  }
   if (!complaint.isArchived) {
     const reason = typeof req.body.reason === "string" ? req.body.reason.trim() : "";
     if (reason.length > 500) return res.status(400).json({ error: "Archive reason must be 500 characters or fewer." });

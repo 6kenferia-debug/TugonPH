@@ -460,10 +460,6 @@ export function AdminPanel({
 
   const handleConfirmArchive = async () => {
     if (!archiveTarget) return;
-    if (!archivedView && !["resolved", "rejected"].includes(archiveTarget.status)) {
-      toast.error("Only resolved or rejected requests can be archived.");
-      return;
-    }
 
     if (typeFilter === "assistance") {
       const action = archivedView ? onUnarchiveAssistance : onArchiveAssistance;
@@ -595,7 +591,7 @@ export function AdminPanel({
               Save Notes
             </Button>
           </DialogClose>
-          {((archivedView && selectedComplaint?.isArchived) || (!archivedView && ["resolved", "rejected"].includes(selectedComplaint?.status ?? ""))) && (
+          {((archivedView && selectedComplaint?.isArchived) || (!archivedView && selectedComplaint)) && (
             <DialogClose asChild>
               <Button
                 variant={archivedView ? "outline" : "secondary"}
@@ -705,36 +701,36 @@ export function AdminPanel({
               Admin Dashboard
             </h1>
           </div>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            className="shrink-0"
-            onClick={() => void onRefresh?.()}
-            disabled={refreshing}
-          >
-            <RefreshCw
-              className={`w-4 h-4 mr-2 ${refreshing ? "animate-spin" : ""}`}
-            />
-            Refresh
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="shrink-0"
-            onClick={() => {
-              setSelectedComplaint(null);
-              onToggleArchiveView();
-            }}
-          >
-            {archivedView ? (
-              <ArchiveRestore className="w-4 h-4 mr-2" />
-            ) : (
-              <Archive className="w-4 h-4 mr-2" />
-            )}
-            {archivedView ? "View Active Records" : "View Archive"}
-          </Button>
+          <div className="flex shrink-0 flex-col items-end gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => void onRefresh?.()}
+              disabled={refreshing}
+            >
+              <RefreshCw
+                className={`w-4 h-4 mr-2 ${refreshing ? "animate-spin" : ""}`}
+              />
+              Refresh
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSelectedComplaint(null);
+                onToggleArchiveView();
+              }}
+            >
+              {archivedView ? (
+                <ArchiveRestore className="w-4 h-4 mr-2" />
+              ) : (
+                <Archive className="w-4 h-4 mr-2" />
+              )}
+              {archivedView ? "View Active Records" : "View Archive"}
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -1406,7 +1402,7 @@ export function AdminPanel({
                               )}
                             </DialogContent>
                           </Dialog>
-                          {((archivedView && complaint.isArchived) || (!archivedView && ["resolved", "rejected"].includes(complaint.status))) && (
+                          {((archivedView && complaint.isArchived) || !archivedView) && (
                             <Button
                               variant="ghost"
                               size="icon"
@@ -1757,7 +1753,7 @@ export function AdminPanel({
                           )}
                         </DialogContent>
                       </Dialog>
-                      {((archivedView && complaint.isArchived) || (!archivedView && ["resolved", "rejected"].includes(complaint.status))) && (
+                      {((archivedView && complaint.isArchived) || !archivedView) && (
                         <Button
                           variant={archivedView ? "outline" : "secondary"}
                           size="sm"

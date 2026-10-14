@@ -559,7 +559,39 @@ export function DataAnalytics({
             </h1>
 
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col items-end gap-2">
+            <div className="flex flex-nowrap items-center gap-2">
+              <DropdownMenu modal={false}>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="secondary" size="sm">
+                    <Download className="w-4 h-4 mr-1" />
+                    Export
+                    <ChevronDown className="w-4 h-4 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={handleExportData}>
+                    <FileSpreadsheet className="w-4 h-4" />
+                    Export as .csv
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={handlePrint}>
+                    <FileText className="w-4 h-4" />
+                    Export as .pdf
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleRefreshAnalytics}
+                disabled={refreshing}
+              >
+                <RefreshCw
+                  className={`w-4 h-4 mr-1 ${refreshing ? "animate-spin" : ""}`}
+                />
+                Refresh
+              </Button>
+            </div>
             <Button
               variant="outline"
               size="sm"
@@ -570,36 +602,6 @@ export function DataAnalytics({
                 : <Archive className="w-4 h-4 mr-1" />}
               {archivedView ? "Active Records" : "Archived Records"}
             </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={handleRefreshAnalytics}
-              disabled={refreshing}
-            >
-              <RefreshCw
-                className={`w-4 h-4 mr-1 ${refreshing ? "animate-spin" : ""}`}
-              />
-              Refresh
-            </Button>
-            <DropdownMenu modal={false}>
-              <DropdownMenuTrigger asChild>
-                <Button variant="secondary" size="sm">
-                  <Download className="w-4 h-4 mr-1" />
-                  Export
-                  <ChevronDown className="w-4 h-4 ml-1" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={handleExportData}>
-                  <FileSpreadsheet className="w-4 h-4" />
-                  Export as .csv
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={handlePrint}>
-                  <FileText className="w-4 h-4" />
-                  Export as .pdf
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
           </div>
         </div>
       </div>
