@@ -10,7 +10,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { MapPin, RefreshCw } from "lucide-react";
 import "leaflet/dist/leaflet.css";
-import heatPluginUrl from "leaflet.heat/dist/leaflet-heat.js?url";
 import {
   ASSISTANCE_CATEGORIES,
   COMPLAINT_CATEGORIES,
@@ -121,39 +120,7 @@ function getCategoryButtonStyle(category: string): CSSProperties {
   } as CSSProperties;
 }
 
-const CATEGORY_INTENSITY = CATEGORY_OPTIONS.reduce<Record<string, number>>(
-  (acc, category, index) => {
-    if (category.value === "all") return acc;
-    const intensity = 0.6 + (index % 5) * 0.08;
-    acc[category.value] = Math.min(intensity, 0.98);
-    return acc;
-  },
-  {},
-);
-
 const POINTS_PANE = "complaint-points-pane";
-
-function loadLeafletHeat(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if ((window as any).L?.heatLayer) {
-      resolve();
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = heatPluginUrl;
-    script.onload = () => {
-      if ((window as any).L?.heatLayer) {
-        resolve();
-      } else {
-        reject(new Error("Leaflet heat plugin did not register its layer."));
-      }
-    };
-    script.onerror = () =>
-      reject(new Error("Leaflet heat plugin failed to load."));
-    document.head.appendChild(script);
-  });
-}
 
 function toNumber(value: unknown): number | undefined {
   if (typeof value === "number") {
@@ -286,6 +253,7 @@ export function HeatmapPanel({
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [mapReady, setMapReady] = useState(false);
   const [heatPluginReady, setHeatPluginReady] = useState(false);
+  const [heatPluginError, setHeatPluginError] = useState<string | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
   const [pointCount, setPointCount] = useState(0);
 
@@ -303,7 +271,7 @@ export function HeatmapPanel({
           return {
             lat: ll[0],
             lng: ll[1],
-            intensity: CATEGORY_INTENSITY[request.category] ?? 0.5,
+            intensity: 1,
             category: request.category,
             ticketId: request.ticketId,
             title: request.title,
@@ -377,15 +345,13 @@ export function HeatmapPanel({
       const pointLayer = L.layerGroup();
       for (const point of points) {
         const dotColor = CATEGORY_DOT_COLORS[point.category] ?? "#64748b";
-        const radius = 5 + point.intensity * 5;
-
         const marker = L.circleMarker([point.lat, point.lng], {
           pane: POINTS_PANE,
-          radius,
+          radius: 4,
           color: "#0f172a",
-          weight: 1.25,
+          weight: 1,
           fillColor: dotColor,
-          fillOpacity: 0.95,
+          fillOpacity: 0.25,
           opacity: 1,
         });
 
@@ -467,15 +433,26 @@ export function HeatmapPanel({
         setTimeout(() => map.invalidateSize(), 400);
 
         setMapReady(true);
-        void loadLeafletHeat()
+        void import("leaflet.heat")
           .then(() => {
-            if (!cancelled) setHeatPluginReady(true);
+            if (typeof (L as any).heatLayer !== "function") {
+              throw new Error("Leaflet heat plugin did not register its layer.");
+            }
+            if (!cancelled) {
+              setHeatPluginError(null);
+              setHeatPluginReady(true);
+            }
           })
           .catch((error) => {
-            console.warn(
-              "Leaflet heat plugin failed to load; rendering point dots instead.",
+            console.error(
+              "Bundled Leaflet heat plugin failed to initialize; rendering point dots instead.",
               error,
             );
+            if (!cancelled) {
+              setHeatPluginError(
+                "Density colors are unavailable; request pins are shown instead.",
+              );
+            }
           });
       } catch (error) {
         console.error("Failed to initialize the heatmap map.", error);
@@ -610,6 +587,15 @@ export function HeatmapPanel({
                 <span>Low</span>
                 <span>High</span>
               </div>
+            </div>
+          )}
+
+          {mapReady && heatPluginError && (
+            <div
+              className="absolute top-2 left-2 right-2 z-[1000] rounded-md border border-amber-500/50 bg-background/95 px-3 py-2 text-xs text-amber-700 shadow"
+              role="alert"
+            >
+              {heatPluginError}
             </div>
           )}
 
