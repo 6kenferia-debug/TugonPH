@@ -385,6 +385,7 @@ export function HeatmapPanel({
     const initializeMap = async () => {
       try {
         const leafletModule = await import("leaflet");
+        // leaflet.heat extends the global API, so it needs a mutable Leaflet instance.
         const L = { ...leafletModule.default };
         if (cancelled || mapRef.current) return;
         delete (L.Icon.Default.prototype as any)._getIconUrl;
